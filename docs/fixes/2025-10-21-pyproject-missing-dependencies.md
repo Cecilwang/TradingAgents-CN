@@ -280,7 +280,7 @@ python scripts/check_missing_dependencies.py
 **建议的可选依赖配置**:
 ```toml
 [project.optional-dependencies]
-qianfan = ["qianfan>=0.4.20"]
+qianfan = ["qianfan>=0.4.12.3"]
 ai = [
     "sentence-transformers>=2.2.0",
     "torch>=2.0.0",
@@ -304,4 +304,3 @@ pip install -e ".[ai]"
 - **架构**: 支持 x86_64 和 ARM64（Apple Silicon）
 
 某些依赖（如 torch）在不同平台上的安装方式可能不同，建议参考官方文档。
-
