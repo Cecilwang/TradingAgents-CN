@@ -9,6 +9,12 @@ describe('getMarketByStockCode', () => {
       expect(getMarketByStockCode('300750')).toBe('A股')
       expect(getMarketByStockCode('688981')).toBe('A股')
     })
+
+    it('应该识别带交易所后缀的A股 full symbol', () => {
+      expect(getMarketByStockCode('000001.SZ')).toBe('A股')
+      expect(getMarketByStockCode('600519.SH')).toBe('A股')
+      expect(getMarketByStockCode('430001.BJ')).toBe('A股')
+    })
   })
 
   describe('港股识别', () => {
@@ -58,6 +64,11 @@ describe('getMarketByStockCode', () => {
       expect(getMarketByStockCode('aapl')).toBe('美股')
       expect(getMarketByStockCode('tsla')).toBe('美股')
     })
+
+    it('应该识别带.US后缀的代码为美股', () => {
+      expect(getMarketByStockCode('AAPL.US')).toBe('美股')
+      expect(getMarketByStockCode('TSLA.US')).toBe('美股')
+    })
   })
 
   describe('边界情况', () => {
@@ -71,4 +82,3 @@ describe('getMarketByStockCode', () => {
     })
   })
 })
-

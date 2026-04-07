@@ -4,7 +4,7 @@
 """
 
 import re
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple
 from enum import Enum
 
 # 导入统一日志系统
@@ -39,8 +39,8 @@ class StockUtils:
 
         ticker = str(ticker).strip().upper()
 
-        # 中国A股：6位数字
-        if re.match(r'^\d{6}$', ticker):
+        # 中国A股：6位数字，或带交易所后缀的 full symbol
+        if re.match(r'^\d{6}(\.(SH|SZ|SS|BJ))?$', ticker):
             return StockMarket.CHINA_A
 
         # 港股：4-5位数字.HK 或 纯4-5位数字（支持0700.HK、09988.HK、00700、9988格式）

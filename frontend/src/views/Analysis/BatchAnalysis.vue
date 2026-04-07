@@ -428,6 +428,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import ModelConfig from '@/components/ModelConfig.vue'
 import { getMarketByStockCode } from '@/utils/market'
+import { buildFullSymbol } from '@/utils/stock'
 import { validateStockCode } from '@/utils/stockValidator'
 
 // 路由实例（必须在顶层调用）
@@ -491,14 +492,34 @@ const batchForm = reactive({
   language: 'zh-CN'
 })
 
-// 使用通用校验器规范化代码，自动识别市场
+const normalizeHKSymbol = (code: string) => `${String(code).trim().toUpperCase()}.HK`
+
+// 批量分析统一使用 full symbol，避免自选股快速导入后丢失交易所后缀。
 const normalizeCodeSmart = (raw: string): { symbol?: string; error?: string } => {
-  const code = String(raw || '').trim()
+  const code = String(raw || '').trim().toUpperCase()
   if (!code) return { error: '空代码' }
+
+  if (/^\d{6}\.(SH|SZ|BJ|SS)$/.test(code)) {
+    return { symbol: code.replace(/\.SS$/, '.SH') }
+  }
+
+  if (/^\d{1,5}\.HK$/.test(code)) {
+    return { symbol: code }
+  }
 
   // 自动识别市场
   const v = validateStockCode(code)
-  if (v.valid && v.normalizedCode) return { symbol: v.normalizedCode }
+  if (v.valid && v.normalizedCode) {
+    if (v.market === 'A股') {
+      return { symbol: buildFullSymbol(v.normalizedCode) || v.normalizedCode }
+    }
+
+    if (v.market === '港股') {
+      return { symbol: normalizeHKSymbol(v.normalizedCode) }
+    }
+
+    return { symbol: v.normalizedCode }
+  }
 
   return { error: v.message || '代码格式无效' }
 }
@@ -514,8 +535,13 @@ const parseStockCodes = () => {
   const invalid: string[] = []
   for (const c of codes) {
     const { symbol } = normalizeCodeSmart(c)
-    if (symbol) normalized.push(symbol)
-    else invalid.push(c)
+    if (symbol) {
+      if (!normalized.includes(symbol)) {
+        normalized.push(symbol)
+      }
+    } else {
+      invalid.push(c)
+    }
   }
 
   stockCodes.value = normalized
