@@ -32,6 +32,13 @@ from app.services.config_service import ConfigService
 from app.services.memory_state_manager import get_memory_state_manager, TaskStatus
 from app.services.redis_progress_tracker import RedisProgressTracker, get_progress_by_id
 from app.services.progress_log_handler import register_analysis_tracker, unregister_analysis_tracker
+from tradingagents.utils.stock_utils import StockUtils, StockMarket
+
+# 设置日志
+logger = logging.getLogger("app.services.simple_analysis_service")
+
+# 配置服务实例
+config_service = ConfigService()
 
 # 股票基础信息获取（用于补充显示名称）
 try:
@@ -43,11 +50,33 @@ try:
 except Exception:
     _get_stock_info_safe = None
 
-# 设置日志
-logger = logging.getLogger("app.services.simple_analysis_service")
 
-# 配置服务实例
-config_service = ConfigService()
+def _infer_market_type_from_symbol(stock_code: str) -> str:
+    """根据股票代码推断中文市场类型，作为后端最终路由依据。"""
+    market = StockUtils.identify_stock_market(stock_code)
+    market_type_map = {
+        StockMarket.CHINA_A: "A股",
+        StockMarket.HONG_KONG: "港股",
+        StockMarket.US: "美股",
+    }
+    return market_type_map.get(market, "A股")
+
+
+def _resolve_market_type_for_symbol(stock_code: str, requested_market_type: Optional[str]) -> str:
+    """优先信任代码本身的市场归属，避免混合批量被默认值误导成A股。"""
+    inferred_market_type = _infer_market_type_from_symbol(stock_code)
+    normalized_requested_market_type = str(requested_market_type or "").strip()
+
+    if (
+        normalized_requested_market_type
+        and normalized_requested_market_type != inferred_market_type
+    ):
+        logger.warning(
+            f"⚠️ 股票 {stock_code} 的请求市场为 {normalized_requested_market_type}，"
+            f"但代码推断为 {inferred_market_type}，将使用推断结果"
+        )
+
+    return inferred_market_type
 
 
 def _normalize_provider_name(provider: Any) -> str:
@@ -795,6 +824,12 @@ class SimpleAnalysisService:
             stock_code = request.get_symbol()
             if not stock_code:
                 raise ValueError("股票代码不能为空")
+            effective_market_type = _resolve_market_type_for_symbol(
+                stock_code,
+                request.parameters.market_type if request.parameters else None,
+            )
+            task_parameters = request.parameters.model_dump() if request.parameters else {}
+            task_parameters["market_type"] = effective_market_type
 
             logger.info(f"📝 创建分析任务: {task_id} - {stock_code}")
             logger.info(f"🔍 内存管理器实例ID: {id(self.memory_manager)}")
@@ -804,7 +839,7 @@ class SimpleAnalysisService:
                 task_id=task_id,
                 user_id=user_id,
                 stock_code=stock_code,
-                parameters=request.parameters.model_dump() if request.parameters else {},
+                parameters=task_parameters,
                 stock_name=(self._resolve_stock_name(stock_code) if hasattr(self, '_resolve_stock_name') else None),
             )
 
@@ -831,6 +866,7 @@ class SimpleAnalysisService:
                         "stock_code": code,
                         "stock_symbol": code,
                         "stock_name": name,
+                        "market_type": effective_market_type,
                         "status": "pending",
                         "progress": 0,
                         "created_at": datetime.utcnow(),
@@ -889,7 +925,10 @@ class SimpleAnalysisService:
             from datetime import datetime
 
             # 获取市场类型
-            market_type = request.parameters.market_type if request.parameters else "A股"
+            market_type = _resolve_market_type_for_symbol(
+                stock_code,
+                request.parameters.market_type if request.parameters else None,
+            )
 
             # 获取分析日期并转换为字符串格式
             analysis_date = request.parameters.analysis_date if request.parameters else None
@@ -1283,7 +1322,11 @@ class SimpleAnalysisService:
                 logger.info(f"✅ [混合模式] 快速模型({quick_provider}) 和 深度模型({deep_provider}) 来自不同厂家")
 
             # 获取市场类型
-            market_type = request.parameters.market_type if request.parameters else "A股"
+            stock_code = request.get_symbol()
+            market_type = _resolve_market_type_for_symbol(
+                stock_code,
+                request.parameters.market_type if request.parameters else None,
+            )
             logger.info(f"📊 [市场类型] 使用市场类型: {market_type}")
 
             # 创建分析配置（支持混合模式）
@@ -1554,7 +1597,7 @@ class SimpleAnalysisService:
 
             # 执行实际分析，传递进度回调和task_id
             state, decision = trading_graph.propagate(
-                request.stock_code,
+                stock_code,
                 analysis_date,
                 progress_callback=graph_progress_callback,
                 task_id=task_id
