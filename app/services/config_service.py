@@ -2792,6 +2792,7 @@ class ConfigService:
                 # 本地 Codex CLI 供应商不依赖 API Key，直接检查本机命令状态。
                 if provider.name == "codex":
                     codex_status = get_codex_cli_status()
+                    provider.is_active = codex_status["available"]
                     provider.extra_config = provider.extra_config or {}
                     provider.extra_config["source"] = "local_cli"
                     provider.extra_config["has_api_key"] = codex_status["available"]

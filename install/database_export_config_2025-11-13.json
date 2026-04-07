@@ -12805,6 +12805,50 @@
               "cost": 3,
               "quality": 3
             }
+          },
+          {
+            "provider": "codex",
+            "model_name": "gpt-5.4",
+            "model_display_name": "gpt-5.4",
+            "api_key": "",
+            "api_base": "",
+            "max_tokens": 4000,
+            "temperature": 0.7,
+            "timeout": 180,
+            "retry_times": 3,
+            "enabled": true,
+            "description": "",
+            "reasoning_effort": null,
+            "fast_mode": false,
+            "ask_for_approval": "never",
+            "sandbox_mode": "read-only",
+            "model_category": "",
+            "custom_endpoint": null,
+            "enable_memory": false,
+            "enable_debug": false,
+            "priority": 0,
+            "input_price_per_1k": null,
+            "output_price_per_1k": null,
+            "currency": "CNY",
+            "capability_level": 5,
+            "suitable_roles": [
+              "both"
+            ],
+            "features": [
+              "tool_calling",
+              "reasoning",
+              "long_context"
+            ],
+            "recommended_depths": [
+              "标准",
+              "深度",
+              "全面"
+            ],
+            "performance_metrics": {
+              "speed": 3,
+              "cost": 2,
+              "quality": 5
+            }
           }
         ],
         "default_llm": "qwen3-max",
@@ -13248,6 +13292,31 @@
         "model_name_format": null,
         "created_at": "2025-10-23T07:52:02.557000",
         "updated_at": "2025-10-23T07:53:00.346000"
+      },
+      {
+        "_id": "692200000000000000000001",
+        "name": "codex",
+        "display_name": "Codex CLI",
+        "description": "OpenAI Codex CLI 本地命令行适配器，通过本机 `codex exec` 执行分析推理",
+        "website": "https://openai.com/codex/",
+        "api_doc_url": "https://developers.openai.com/codex/cli/",
+        "default_base_url": "local://codex-cli",
+        "is_active": false,
+        "supported_features": [
+          "chat",
+          "completion",
+          "function_calling",
+          "streaming"
+        ],
+        "created_at": "2025-11-13T00:00:00",
+        "updated_at": "2025-11-13T00:00:00",
+        "api_key": "",
+        "api_secret": "",
+        "extra_config": {
+          "source": "local_cli",
+          "codex_version": null
+        },
+        "logo_url": null
       }
     ],
     "market_categories": [
@@ -14553,6 +14622,26 @@
         ],
         "created_at": "2025-10-23T08:01:55.478000",
         "updated_at": "2025-10-23T08:01:55.478000"
+      },
+      {
+        "_id": "692200000000000000000002",
+        "provider": "codex",
+        "provider_name": "Codex CLI",
+        "models": [
+          {
+            "name": "gpt-5.4",
+            "display_name": "gpt-5.4",
+            "description": "适合复杂推理与更高质量的分析任务",
+            "context_length": null,
+            "max_tokens": null,
+            "input_price_per_1k": null,
+            "output_price_per_1k": null,
+            "currency": "CNY",
+            "is_deprecated": false,
+            "release_date": null,
+            "capabilities": []
+          }
+        ]
       }
     ]
   }

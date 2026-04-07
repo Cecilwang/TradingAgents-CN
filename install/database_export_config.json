@@ -1,7 +1,7 @@
 {
   "_description": "TradingAgents-CN 预配置数据说明",
-  "_note": "实际的配置数据文件是 database_export_config_2025-10-17.json，已打包到 Docker 镜像中",
-  "_image_path": "/app/install/database_export_config_2025-10-17.json",
+  "_note": "实际的配置数据文件是 database_export_config_2025-11-13.json，已打包到 Docker 镜像中",
+  "_image_path": "/app/install/database_export_config_2025-11-13.json",
   "_usage": "docker exec -it tradingagents-backend python scripts/import_config_and_create_user.py",
   
   "预配置集合": {
@@ -30,8 +30,9 @@
     
     "llm_providers": {
       "说明": "LLM 服务提供商配置",
-      "数量": "8 个提供商",
+      "数量": "10 个提供商",
       "包含": [
+        "Codex CLI (本地命令行)",
         "OpenAI (GPT-4, GPT-3.5)",
         "阿里百炼 (Qwen系列)",
         "DeepSeek (DeepSeek-Chat)",
@@ -39,14 +40,16 @@
         "Google (Gemini)",
         "Anthropic (Claude)",
         "OpenRouter (聚合平台)",
-        "AI302 (国内中转)"
+        "AI302 (国内中转)",
+        "SiliconFlow (硅基流动)"
       ]
     },
     
     "model_catalog": {
       "说明": "可用的 LLM 模型目录",
-      "数量": "15+ 个模型",
+      "数量": "16+ 个模型",
       "包含": [
+        "gpt-5.4 (Codex CLI)",
         "gpt-4o (OpenAI)",
         "gpt-4o-mini (OpenAI)",
         "qwen-plus (阿里百炼)",
@@ -199,4 +202,3 @@
     "示例": "https://github.com/hsliuping/TradingAgents-CN/tree/v1.0.0-preview/examples"
   }
 }
-
