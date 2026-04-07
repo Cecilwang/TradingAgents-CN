@@ -25,8 +25,8 @@ print(f"  - quick_analysis_model: {quick_model}")
 print(f"  - deep_analysis_model: {deep_model}")
 
 # 3. 验证结果
-expected_quick = "qwen-flash"
-expected_deep = "qwen-plus"
+expected_quick = "gpt-5.4"
+expected_deep = "gpt-5.4"
 
 if quick_model == expected_quick and deep_model == expected_deep:
     print(f"\n🎉 测试通过！模型配置正确:")
@@ -38,4 +38,3 @@ else:
     print(f"  实际: quick={quick_model}, deep={deep_model}")
 
 print("\n" + "=" * 80)
-

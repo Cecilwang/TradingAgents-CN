@@ -4,6 +4,8 @@
 
 import { ApiClient } from './request'
 
+const ANALYSIS_DEFAULT_MODEL = 'gpt-5.4'
+
 // 配置相关类型定义
 
 // 大模型厂家
@@ -433,9 +435,9 @@ export const configApi = {
 
   // 获取默认模型配置
   getDefaultModels(): Promise<{ quick_analysis_model: string; deep_analysis_model: string }> {
-    return ApiClient.get('/api/config/settings').then(settings => ({
-      quick_analysis_model: settings.quick_analysis_model || 'qwen-turbo',
-      deep_analysis_model: settings.deep_analysis_model || 'qwen-max'
+    return this.getSystemSettings().then(settings => ({
+      quick_analysis_model: settings.quick_analysis_model || ANALYSIS_DEFAULT_MODEL,
+      deep_analysis_model: settings.deep_analysis_model || ANALYSIS_DEFAULT_MODEL
     }))
   },
 

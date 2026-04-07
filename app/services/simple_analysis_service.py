@@ -234,7 +234,6 @@ def get_provider_and_url_by_model_sync(model_name: str) -> dict:
                     if provider_api_key and provider_api_key.strip() and provider_api_key != "your-api-key":
                         api_key = provider_api_key
                         logger.info(f"✅ [同步查询] 使用厂家 {provider} 的 API Key")
-
             # 如果厂家配置中没有 API Key，尝试从环境变量获取
             if not api_key:
                 api_key = _get_env_api_key_for_provider(provider)
@@ -381,6 +380,7 @@ def _get_default_provider_by_model(model_name: str) -> str:
         'qwen-max-longcontext': 'dashscope',
 
         # OpenAI
+        'gpt-5.4': 'codex',
         'gpt-3.5-turbo': 'openai',
         'gpt-4': 'openai',
         'gpt-4-turbo': 'openai',

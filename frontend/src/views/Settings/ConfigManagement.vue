@@ -544,7 +544,7 @@
                   </div>
                 </el-option>
               </el-select>
-              <div class="setting-description">用于市场分析、新闻分析、基本面分析、研究员等，响应速度快（推荐：qwen-turbo）</div>
+              <div class="setting-description">用于市场分析、新闻分析、基本面分析、研究员等，响应速度快（推荐：gpt-5.4）</div>
             </el-form-item>
 
             <el-form-item label="深度决策模型">
@@ -566,7 +566,7 @@
                   </div>
                 </el-option>
               </el-select>
-              <div class="setting-description">用于研究管理者综合决策、风险管理者最终评估，推理能力强（推荐：qwen-max）</div>
+              <div class="setting-description">用于研究管理者综合决策、风险管理者最终评估，推理能力强（推荐：gpt-5.4）</div>
             </el-form-item>
 
             <el-form-item label="启用成本跟踪">
@@ -1177,6 +1177,8 @@ const currentDatabaseConfig = ref<Partial<DatabaseConfig>>({
 // 测试状态
 const testingProviders = ref<Record<string, boolean>>({})
 
+const ANALYSIS_DEFAULT_MODEL = 'gpt-5.4'
+
 // 方法
 const handleMenuSelect = (index: string) => {
   activeTab.value = index
@@ -1434,8 +1436,8 @@ const loadSystemSettings = async () => {
     ])
     // 确保有默认值
     systemSettings.value = {
-      quick_analysis_model: 'qwen-turbo',
-      deep_analysis_model: 'qwen-max',
+      quick_analysis_model: ANALYSIS_DEFAULT_MODEL,
+      deep_analysis_model: ANALYSIS_DEFAULT_MODEL,
       default_analysis_timeout: 300,
       enable_cache: true,
       cache_ttl: 3600,

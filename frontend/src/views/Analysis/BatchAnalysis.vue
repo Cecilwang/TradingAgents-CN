@@ -513,8 +513,8 @@ const filteredFavoriteOptions = computed<FavoriteQuickOption[]>(() => {
 
 // 模型设置
 const modelSettings = ref({
-  quickAnalysisModel: 'qwen-turbo',
-  deepAnalysisModel: 'qwen-max'
+  quickAnalysisModel: 'gpt-5.4',
+  deepAnalysisModel: 'gpt-5.4'
 })
 
 // 可用的模型列表（从配置中获取）
@@ -767,8 +767,8 @@ const initializeModelSettings = async () => {
   } catch (error) {
     console.error('加载默认模型配置失败:', error)
     // 使用硬编码的默认值
-    modelSettings.value.quickAnalysisModel = 'qwen-turbo'
-    modelSettings.value.deepAnalysisModel = 'qwen-max'
+    modelSettings.value.quickAnalysisModel = 'gpt-5.4'
+    modelSettings.value.deepAnalysisModel = 'gpt-5.4'
   }
 }
 
