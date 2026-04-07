@@ -109,7 +109,10 @@ class FinancialSituationMemory:
         # 初始化降级选项标志
         self.fallback_available = False
         
-        if self.llm_provider == "dashscope" or self.llm_provider == "alibaba":
+        if self.llm_provider == "codex":
+            self.client = "DISABLED"
+            logger.info(f"🧩 Codex 当前未提供默认 embedding 模型，记忆功能已禁用")
+        elif self.llm_provider == "dashscope" or self.llm_provider == "alibaba":
             self.embedding = "text-embedding-v3"
             self.client = None  # DashScope不需要OpenAI客户端
 
