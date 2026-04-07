@@ -7,24 +7,36 @@ import asyncio
 import sys
 import os
 from datetime import datetime
+from typing import Any, Dict, List
 
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from app.core.database import init_db, get_mongo_db
-from app.models.config import LLMProvider
+from tradingagents.llm_adapters.codex_cli_adapter import (
+    get_codex_cli_status,
+)
 
-async def init_providers():
-    """初始化大模型厂家数据"""
-    print("🚀 开始初始化大模型厂家数据...")
-    
-    # 初始化数据库连接
-    await init_db()
-    db = get_mongo_db()
-    providers_collection = db.llm_providers
-    
-    # 预设厂家数据
-    providers_data = [
+
+def build_providers_data() -> List[Dict[str, Any]]:
+    """构造预设厂家数据。"""
+    codex_status = get_codex_cli_status()
+
+    return [
+        {
+            "name": "codex",
+            "display_name": "Codex CLI",
+            "description": "OpenAI Codex CLI 本地命令行适配器，通过本机 `codex exec` 执行分析推理",
+            "website": "https://openai.com/codex/",
+            "api_doc_url": "https://developers.openai.com/codex/cli/",
+            "default_base_url": "local://codex-cli",
+            "is_active": codex_status["available"],
+            "supported_features": ["chat", "completion", "function_calling", "streaming"],
+            "extra_config": {
+                "source": "local_cli",
+                "codex_version": codex_status["version"],
+            },
+        },
         {
             "name": "openai",
             "display_name": "OpenAI",
@@ -106,6 +118,17 @@ async def init_providers():
             "supported_features": ["chat", "completion", "embedding", "image", "vision", "function_calling", "streaming"]
         }
     ]
+
+async def init_providers():
+    """初始化大模型厂家数据"""
+    print("🚀 开始初始化大模型厂家数据...")
+    
+    # 初始化数据库连接
+    await init_db()
+    db = get_mongo_db()
+    providers_collection = db.llm_providers
+    
+    providers_data = build_providers_data()
     
     # 清除现有数据
     await providers_collection.delete_many({})

@@ -58,7 +58,7 @@
             </el-menu-item>
             <el-menu-item index="api-keys">
               <el-icon><Key /></el-icon>
-              <span>API密钥状态</span>
+              <span>接入状态</span>
             </el-menu-item>
             <el-menu-item index="import-export">
               <el-icon><Download /></el-icon>
@@ -102,14 +102,14 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="API密钥" width="120">
+              <el-table-column label="接入状态" width="120">
                 <template #default="{ row }">
                   <div class="api-key-status">
                     <el-tag
-                      :type="row.extra_config?.has_api_key ? 'success' : 'danger'"
+                      :type="getProviderConnectionStatusType(row)"
                       size="small"
                     >
-                      {{ row.extra_config?.has_api_key ? '已配置' : '未配置' }}
+                      {{ getProviderConnectionStatusText(row) }}
                     </el-tag>
                   </div>
                 </template>
@@ -122,12 +122,12 @@
                       {{ row.is_active ? '启用' : '禁用' }}
                     </el-tag>
                     <el-tag
-                      v-if="row.extra_config?.has_api_key"
-                      :type="row.extra_config?.source === 'environment' ? 'warning' : 'success'"
+                      v-if="row.extra_config?.source"
+                      :type="getProviderSourceTagType(row)"
                       size="small"
                       class="key-source-tag"
                     >
-                      {{ row.extra_config?.source === 'environment' ? 'ENV' : 'DB' }}
+                      {{ getProviderSourceTagText(row) }}
                     </el-tag>
                   </div>
                 </template>
@@ -155,7 +155,7 @@
                     编辑
                   </el-button>
                   <el-button
-                    v-if="row.extra_config?.has_api_key"
+                    v-if="canTestProvider(row)"
                     size="small"
                     type="info"
                     @click.stop="testProviderAPI(row)"
@@ -779,7 +779,7 @@
         <el-card v-show="activeTab === 'api-keys'" class="config-content" shadow="never">
           <template #header>
             <div class="card-header">
-              <h3>API密钥状态</h3>
+              <h3>厂家接入状态</h3>
               <el-button @click="loadProviders" :loading="providersLoading">
                 <el-icon><Refresh /></el-icon>
                 刷新状态
@@ -790,7 +790,7 @@
           <div class="api-keys-content" v-loading="providersLoading">
             <el-row :gutter="24">
               <el-col :span="12">
-                <h4>🔑 AI厂家密钥状态</h4>
+                <h4>🔌 AI厂家接入状态</h4>
                 <div
                   v-for="provider in providers"
                   :key="provider.id"
@@ -833,7 +833,7 @@
                   </div>
                   <div class="stat-item">
                     <div class="stat-number">{{ configuredProvidersCount }}</div>
-                    <div class="stat-label">已配置密钥</div>
+                    <div class="stat-label">已就绪厂家</div>
                   </div>
                   <div class="stat-item">
                     <div class="stat-number">{{ activeProvidersCount }}</div>
@@ -1089,8 +1089,6 @@ import {
   OfficeBuilding,
   CircleCheck,
   Collection,
-  Star,
-  Money
 } from '@element-plus/icons-vue'
 
 import {
@@ -1111,6 +1109,8 @@ import DataSourceConfigDialog from './components/DataSourceConfigDialog.vue'
 import MarketCategoryManagement from './components/MarketCategoryManagement.vue'
 import DataSourceGroupingDialog from './components/DataSourceGroupingDialog.vue'
 import SortableDataSourceList from './components/SortableDataSourceList.vue'
+
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 
 // 响应式数据
 const activeTab = ref('validation')
@@ -1553,8 +1553,9 @@ const refreshLLMConfigs = () => {
 }
 
 // 获取厂家标签类型
-const getProviderTagType = (provider: string) => {
-  const typeMap: Record<string, string> = {
+const getProviderTagType = (provider: string): ElTagType => {
+  const typeMap: Record<string, ElTagType> = {
+    'codex': 'warning',
     'openai': 'primary',
     'google': 'success',
     'anthropic': 'warning',
@@ -1565,6 +1566,45 @@ const getProviderTagType = (provider: string) => {
     'qianfan': 'success'
   }
   return typeMap[provider.toLowerCase()] || 'info'
+}
+
+const isLocalCliProvider = (provider: LLMProvider) => {
+  return provider.extra_config?.source === 'local_cli' || provider.name === 'codex'
+}
+
+const getProviderConnectionStatusType = (provider: LLMProvider) => {
+  return provider.extra_config?.has_api_key ? 'success' : 'danger'
+}
+
+const getProviderConnectionStatusText = (provider: LLMProvider) => {
+  if (isLocalCliProvider(provider)) {
+    return provider.extra_config?.has_api_key ? 'CLI 就绪' : 'CLI 未就绪'
+  }
+  return provider.extra_config?.has_api_key ? '已配置' : '未配置'
+}
+
+const getProviderSourceTagType = (provider: LLMProvider) => {
+  if (provider.extra_config?.source === 'environment') {
+    return 'warning'
+  }
+  if (provider.extra_config?.source === 'local_cli') {
+    return 'info'
+  }
+  return 'success'
+}
+
+const getProviderSourceTagText = (provider: LLMProvider) => {
+  if (provider.extra_config?.source === 'environment') {
+    return 'ENV'
+  }
+  if (provider.extra_config?.source === 'local_cli') {
+    return 'LOCAL'
+  }
+  return 'DB'
+}
+
+const canTestProvider = (provider: LLMProvider) => {
+  return isLocalCliProvider(provider) || provider.extra_config?.has_api_key === true
 }
 
 // 🆕 获取能力等级文本
@@ -1580,15 +1620,15 @@ const getCapabilityLevelText = (level: number) => {
 }
 
 // 🆕 获取能力等级标签类型
-const getCapabilityLevelType = (level: number) => {
-  const typeMap: Record<number, string> = {
+const getCapabilityLevelType = (level: number): ElTagType => {
+  const typeMap: Record<number, ElTagType> = {
     1: 'info',
-    2: '',
+    2: 'info',
     3: 'success',
     4: 'warning',
     5: 'danger'
   }
-  return typeMap[level] || ''
+  return typeMap[level] || 'info'
 }
 
 // 🆕 获取角色文本
@@ -1715,6 +1755,16 @@ const getKeyStatusType = (provider: LLMProvider) => {
 
 // 获取密钥状态文本
 const getKeyStatusText = (provider: LLMProvider) => {
+  if (isLocalCliProvider(provider)) {
+    if (!provider.extra_config?.has_api_key) {
+      return '本地 CLI 未就绪'
+    }
+    if (!provider.is_active) {
+      return '本地 CLI 已就绪(禁用)'
+    }
+    return '本地 CLI 已就绪'
+  }
+
   if (!provider.extra_config?.has_api_key) {
     return '未配置'
   }

@@ -20,7 +20,7 @@ export interface LLMProvider {
   default_base_url?: string
   extra_config?: {
     has_api_key?: boolean
-    source?: 'environment' | 'database'
+    source?: 'environment' | 'database' | 'local_cli'
     [key: string]: any
   }
   // 🆕 聚合渠道支持
@@ -43,6 +43,10 @@ export interface LLMConfig {
   retry_times: number
   enabled: boolean
   description?: string
+  reasoning_effort?: string
+  fast_mode?: boolean
+  ask_for_approval?: string
+  sandbox_mode?: string
   // 定价配置
   input_price_per_1k?: number
   output_price_per_1k?: number
@@ -519,7 +523,10 @@ export const DEFAULT_LLM_CONFIG: Partial<LLMConfig> = {
   temperature: 0.7,
   timeout: 60,
   retry_times: 3,
-  enabled: true
+  enabled: true,
+  fast_mode: false,
+  ask_for_approval: 'never',
+  sandbox_mode: 'read-only'
 }
 
 export const DEFAULT_DATA_SOURCE_CONFIG: Partial<DataSourceConfig> = {
@@ -585,13 +592,29 @@ export const DEFAULT_DATABASE_CONFIG: Partial<DatabaseConfig> = {
 // 配置验证函数
 export const validateLLMConfig = (config: Partial<LLMConfig>): string[] => {
   const errors: string[] = []
+  const isCodex = config.provider === 'codex'
 
   if (!config.provider) errors.push('供应商不能为空')
   if (!config.model_name) errors.push('模型名称不能为空')
   // 注意：API密钥不在这里验证，因为它是在厂家配置中管理的
-  if (config.max_tokens && config.max_tokens <= 0) errors.push('最大Token数必须大于0')
-  if (config.temperature && (config.temperature < 0 || config.temperature > 2)) {
+  if (!isCodex && config.max_tokens && config.max_tokens <= 0) errors.push('最大Token数必须大于0')
+  if (!isCodex && config.temperature !== undefined && (config.temperature < 0 || config.temperature > 2)) {
     errors.push('温度参数必须在0-2之间')
+  }
+  if (isCodex) {
+    const allowedReasoningEfforts = new Set(['low', 'medium', 'high', 'xhigh'])
+    const allowedApprovalPolicies = new Set(['untrusted', 'on-request', 'never'])
+    const allowedSandboxModes = new Set(['read-only', 'workspace-write', 'danger-full-access'])
+
+    if (config.reasoning_effort && !allowedReasoningEfforts.has(config.reasoning_effort)) {
+      errors.push('Reasoning effort 配置无效')
+    }
+    if (config.ask_for_approval && !allowedApprovalPolicies.has(config.ask_for_approval)) {
+      errors.push('ask-for-approval 配置无效')
+    }
+    if (config.sandbox_mode && !allowedSandboxModes.has(config.sandbox_mode)) {
+      errors.push('sandbox 配置无效')
+    }
   }
 
   return errors

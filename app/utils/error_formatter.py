@@ -37,6 +37,7 @@ class ErrorFormatter:
         "dashscope": "阿里百炼（通义千问）",
         "qianfan": "百度千帆",
         "deepseek": "DeepSeek",
+        "codex": "Codex CLI",
         "openai": "OpenAI",
         "openrouter": "OpenRouter",
         "anthropic": "Anthropic Claude",
@@ -96,9 +97,15 @@ class ErrorFormatter:
             "api key", "api_key", "apikey", "invalid_api_key", "authentication", 
             "unauthorized", "401", "403", "gemini", "openai", "dashscope", "qianfan"
         ]):
+            # LLM 请求/schema 错误，不要误报成 API Key 问题
+            if any(keyword in error_lower for keyword in [
+                "invalid_json_schema", "response_format", "output_schema", "json schema"
+            ]):
+                return ErrorCategory.LLM_OTHER, llm_provider
+
             # LLM API Key 错误
             if any(keyword in error_lower for keyword in [
-                "api key", "api_key", "apikey", "invalid", "authentication", 
+                "api key", "api_key", "apikey", "invalid_api_key", "authentication", 
                 "unauthorized", "401", "invalid_api_key", "api key not valid"
             ]):
                 return ErrorCategory.LLM_API_KEY, llm_provider
@@ -405,4 +412,3 @@ class ErrorFormatter:
                 ),
                 "technical_detail": original_error
             }
-

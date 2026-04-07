@@ -13,6 +13,7 @@ from .user import PyObjectId
 
 class ModelProvider(str, Enum):
     """大模型提供商枚举"""
+    CODEX = "codex"
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     ZHIPU = "zhipu"
@@ -196,6 +197,22 @@ class LLMConfig(BaseModel):
     retry_times: int = Field(default=3, description="重试次数")
     enabled: bool = Field(default=True, description="是否启用")
     description: Optional[str] = Field(None, description="配置描述")
+    reasoning_effort: Optional[str] = Field(
+        default=None,
+        description="Codex CLI 推理强度（未设置时沿用本机 CLI 默认值）",
+    )
+    fast_mode: bool = Field(
+        default=False,
+        description="Codex CLI 是否强制启用 fast service tier",
+    )
+    ask_for_approval: str = Field(
+        default="never",
+        description="Codex CLI 审批策略",
+    )
+    sandbox_mode: str = Field(
+        default="read-only",
+        description="Codex CLI 沙箱模式",
+    )
 
     # 新增字段 - 来自sidebar.py的配置项
     model_category: Optional[str] = Field(None, description="模型类别(用于OpenRouter等)")
@@ -366,6 +383,10 @@ class LLMConfigRequest(BaseModel):
     retry_times: int = 3
     enabled: bool = True
     description: Optional[str] = None
+    reasoning_effort: Optional[str] = None
+    fast_mode: bool = False
+    ask_for_approval: str = "never"
+    sandbox_mode: str = "read-only"
 
     # 新增字段以匹配前端
     enable_memory: bool = False

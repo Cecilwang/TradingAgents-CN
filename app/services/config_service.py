@@ -17,6 +17,7 @@ from app.models.config import (
     ModelProvider, DataSourceType, DatabaseType, LLMProvider,
     MarketCategory, DataSourceGrouping, ModelCatalog, ModelInfo
 )
+from tradingagents.llm_adapters.codex_cli_adapter import get_codex_cli_status
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,12 @@ class ConfigService:
                 # 否则使用全局函数
                 self.db = get_mongo_db()
         return self.db
+
+    def _normalize_provider_name(self, provider: Any) -> str:
+        """统一兼容枚举和字符串形式的 provider。"""
+        if hasattr(provider, "value"):
+            return str(provider.value)
+        return str(provider)
 
     # ==================== 市场分类管理 ====================
 
@@ -586,15 +593,17 @@ class ConfigService:
 
             # 打印所有现有配置
             for i, llm in enumerate(config.llm_configs):
-                print(f"   {i+1}. provider: {llm.provider.value}, model_name: {llm.model_name}")
+                current_provider = self._normalize_provider_name(llm.provider)
+                print(f"   {i+1}. provider: {current_provider}, model_name: {llm.model_name}")
 
             # 查找并删除指定的LLM配置
             original_count = len(config.llm_configs)
+            normalized_provider = provider.lower()
 
             # 使用更宽松的匹配条件
             config.llm_configs = [
                 llm for llm in config.llm_configs
-                if not (str(llm.provider.value).lower() == provider.lower() and llm.model_name == model_name)
+                if not (self._normalize_provider_name(llm.provider).lower() == normalized_provider and llm.model_name == model_name)
             ]
 
             new_count = len(config.llm_configs)
@@ -862,8 +871,10 @@ class ConfigService:
                 return False
 
             # 查找并更新对应的LLM配置
+            target_provider = self._normalize_provider_name(llm_config.provider).lower()
             for i, existing_config in enumerate(config.llm_configs):
-                if existing_config.model_name == llm_config.model_name:
+                existing_provider = self._normalize_provider_name(existing_config.provider).lower()
+                if existing_provider == target_provider and existing_config.model_name == llm_config.model_name:
                     config.llm_configs[i] = llm_config
                     break
             else:
@@ -879,13 +890,18 @@ class ConfigService:
         """测试大模型配置 - 真实调用API进行验证"""
         start_time = time.time()
         try:
-            import requests
-
             # 获取 provider 字符串值（兼容枚举和字符串）
-            provider_str = llm_config.provider.value if hasattr(llm_config.provider, 'value') else str(llm_config.provider)
+            provider_str = self._normalize_provider_name(llm_config.provider)
 
             logger.info(f"🧪 测试大模型配置: {provider_str} - {llm_config.model_name}")
             logger.info(f"📍 API基础URL (模型配置): {llm_config.api_base}")
+
+            if provider_str == "codex":
+                result = self._test_codex_cli(f"{provider_str} {llm_config.model_name}")
+                result["response_time"] = time.time() - start_time
+                return result
+
+            import requests
 
             # 获取厂家配置（用于获取 API Key 和 default_base_url）
             db = await self._get_db()
@@ -2372,6 +2388,17 @@ class ConfigService:
         """获取默认模型目录数据"""
         return [
             {
+                "provider": "codex",
+                "provider_name": "Codex CLI",
+                "models": [
+                    {
+                        "name": "gpt-5.4",
+                        "display_name": "gpt-5.4",
+                        "description": "适合复杂推理与更高质量的分析任务"
+                    }
+                ]
+            },
+            {
                 "provider": "dashscope",
                 "provider_name": "通义千问",
                 "models": [
@@ -2762,6 +2789,21 @@ class ConfigService:
             for provider_data in providers_data:
                 provider = LLMProvider(**provider_data)
 
+                # 本地 Codex CLI 供应商不依赖 API Key，直接检查本机命令状态。
+                if provider.name == "codex":
+                    codex_status = get_codex_cli_status()
+                    provider.extra_config = provider.extra_config or {}
+                    provider.extra_config["source"] = "local_cli"
+                    provider.extra_config["has_api_key"] = codex_status["available"]
+                    provider.extra_config["codex_version"] = codex_status["version"]
+                    providers.append(provider)
+                    logger.info(
+                        "✅ [get_llm_providers] 本地 Codex CLI 状态: available=%s, version=%s",
+                        provider.extra_config["has_api_key"],
+                        provider.extra_config["codex_version"]
+                    )
+                    continue
+
                 # 🔥 判断数据库中的 API Key 是否有效
                 db_key_valid = self._is_valid_api_key(provider.api_key)
                 logger.info(f"🔍 [get_llm_providers] 供应商 {provider.display_name} ({provider.name}): 数据库密钥有效={db_key_valid}")
@@ -3136,6 +3178,15 @@ class ConfigService:
             # 预设厂家配置
             default_providers = [
                 {
+                    "name": "codex",
+                    "display_name": "Codex CLI",
+                    "description": "OpenAI Codex CLI 本地命令行适配器，通过本机 `codex exec` 执行分析推理",
+                    "website": "https://openai.com/codex/",
+                    "api_doc_url": "https://developers.openai.com/codex/cli/",
+                    "default_base_url": "local://codex-cli",
+                    "supported_features": ["chat", "completion", "function_calling", "streaming"]
+                },
+                {
                     "name": "openai",
                     "display_name": "OpenAI",
                     "description": "OpenAI是人工智能领域的领先公司，提供GPT系列模型",
@@ -3180,11 +3231,33 @@ class ConfigService:
             for provider_config in default_providers:
                 # 从环境变量获取API密钥
                 api_key = self._get_env_api_key(provider_config["name"])
+                is_local_codex = provider_config["name"] == "codex"
+                codex_status = get_codex_cli_status() if is_local_codex else None
+                codex_available = codex_status["available"] if codex_status else False
 
                 # 检查是否已存在
                 existing = await providers_collection.find_one({"name": provider_config["name"]})
 
                 if existing:
+                    if is_local_codex:
+                        await providers_collection.update_one(
+                            {"name": provider_config["name"]},
+                            {
+                                "$set": {
+                                    "is_active": codex_available,
+                                    "updated_at": now_tz(),
+                                    "extra_config": {
+                                        **(existing.get("extra_config") or {}),
+                                        "source": "local_cli",
+                                        "codex_version": codex_status["version"]
+                                    }
+                                }
+                            }
+                        )
+                        updated_count += 1
+                        print(f"✅ 更新厂家 {provider_config['display_name']} 的本地 CLI 状态")
+                        continue
+
                     # 如果已存在但没有API密钥，且环境变量中有密钥，则更新
                     if not existing.get("api_key") and api_key:
                         update_data = {
@@ -3208,8 +3281,12 @@ class ConfigService:
                 provider_data = {
                     **provider_config,
                     "api_key": api_key,
-                    "is_active": bool(api_key),  # 有密钥的自动启用
-                    "extra_config": {"migrated_from": "environment"} if api_key else {},
+                    "is_active": codex_available if is_local_codex else bool(api_key),  # 有密钥的自动启用
+                    "extra_config": (
+                        {"source": "local_cli", "codex_version": codex_status["version"]}
+                        if is_local_codex
+                        else ({"migrated_from": "environment"} if api_key else {})
+                    ),
                     "created_at": now_tz(),
                     "updated_at": now_tz()
                 }
@@ -3278,6 +3355,10 @@ class ConfigService:
             provider_name = provider_data.get("name")
             api_key = provider_data.get("api_key")
             display_name = provider_data.get("display_name", provider_name)
+
+            # 本地 CLI 厂家不依赖 API Key，直接检测本机命令状态。
+            if provider_name == "codex":
+                return await asyncio.get_event_loop().run_in_executor(None, self._test_codex_cli, display_name)
 
             # 🔥 判断数据库中的 API Key 是否有效
             if not self._is_valid_api_key(api_key):
@@ -3363,6 +3444,21 @@ class ConfigService:
                 "success": False,
                 "message": f"{display_name} 连接测试失败: {str(e)}"
             }
+
+    def _test_codex_cli(self, display_name: str) -> dict:
+        """测试本地 Codex CLI 是否可用。"""
+        codex_status = get_codex_cli_status()
+        if not codex_status["available"]:
+            return {
+                "success": False,
+                "message": f"{display_name} 未安装或不可执行，请先确认 `codex --version` 可用"
+            }
+
+        return {
+            "success": True,
+            "message": f"{display_name} 本地 CLI 可用",
+            "data": {"version": codex_status["version"], "source": "local_cli"}
+        }
 
     def _test_google_api(self, api_key: str, display_name: str, base_url: str = None, model_name: str = None) -> dict:
         """测试Google AI API"""
@@ -3932,6 +4028,12 @@ class ConfigService:
             api_key = provider_data.get("api_key")
             base_url = provider_data.get("default_base_url")
             display_name = provider_data.get("display_name", provider_name)
+
+            if provider_name == "codex":
+                return {
+                    "success": False,
+                    "message": f"{display_name} 为本地 CLI 厂家，请直接在模型目录中手动维护可选模型"
+                }
 
             # 🔥 判断数据库中的 API Key 是否有效
             if not self._is_valid_api_key(api_key):

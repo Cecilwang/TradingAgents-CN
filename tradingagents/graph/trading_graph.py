@@ -10,7 +10,7 @@ import time
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
-from tradingagents.llm_adapters import ChatDashScopeOpenAI, ChatGoogleOpenAI
+from tradingagents.llm_adapters import ChatCodexCLI, ChatDashScopeOpenAI, ChatGoogleOpenAI
 
 from langgraph.prebuilt import ToolNode
 
@@ -38,7 +38,36 @@ from .reflection import Reflector
 from .signal_processing import SignalProcessor
 
 
-def create_llm_by_provider(provider: str, model: str, backend_url: str, temperature: float, max_tokens: int, timeout: int, api_key: str = None):
+def _build_codex_cli_options(
+    model_config: Optional[Dict[str, Any]] = None,
+    timeout: int = 180,
+) -> Dict[str, Any]:
+    """将运行时模型配置转换为 Codex CLI 适配器参数。"""
+    config = model_config or {}
+    reasoning_effort = config.get("reasoning_effort")
+
+    if isinstance(reasoning_effort, str):
+        reasoning_effort = reasoning_effort.strip() or None
+
+    return {
+        "request_timeout": config.get("timeout", timeout),
+        "reasoning_effort": reasoning_effort,
+        "fast_mode": bool(config.get("fast_mode", False)),
+        "ask_for_approval": config.get("ask_for_approval") or "never",
+        "sandbox_mode": config.get("sandbox_mode") or "read-only",
+    }
+
+
+def create_llm_by_provider(
+    provider: str,
+    model: str,
+    backend_url: str,
+    temperature: float,
+    max_tokens: int,
+    timeout: int,
+    api_key: str = None,
+    model_config: Optional[Dict[str, Any]] = None,
+):
     """
     根据 provider 创建对应的 LLM 实例
 
@@ -149,6 +178,16 @@ def create_llm_by_provider(provider: str, model: str, backend_url: str, temperat
             timeout=timeout
         )
 
+    elif provider.lower() == "codex":
+        # 本地 Codex CLI 不依赖远端 API Key，而是直接走本机 `codex exec`
+        codex_options = _build_codex_cli_options(model_config, timeout)
+        return ChatCodexCLI(
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **codex_options,
+        )
+
     elif provider.lower() in ["qianfan", "custom_openai"]:
         return create_openai_compatible_llm(
             provider=provider,
@@ -253,7 +292,8 @@ class TradingAgentsGraph:
                 temperature=quick_temperature,
                 max_tokens=quick_max_tokens,
                 timeout=quick_timeout,
-                api_key=self.config.get("quick_api_key")  # 🔥 传递 API Key
+                api_key=self.config.get("quick_api_key"),  # 🔥 传递 API Key
+                model_config=quick_config,
             )
 
             self.deep_thinking_llm = create_llm_by_provider(
@@ -263,7 +303,8 @@ class TradingAgentsGraph:
                 temperature=deep_temperature,
                 max_tokens=deep_max_tokens,
                 timeout=deep_timeout,
-                api_key=self.config.get("deep_api_key")  # 🔥 传递 API Key
+                api_key=self.config.get("deep_api_key"),  # 🔥 传递 API Key
+                model_config=deep_config,
             )
 
             logger.info(f"✅ [混合模式] LLM 实例创建成功")
@@ -675,8 +716,31 @@ class TradingAgentsGraph:
                 max_tokens=quick_max_tokens,
                 timeout=quick_timeout
             )
-            
+
             logger.info("✅ [智谱AI] 已使用专用适配器配置成功并应用用户配置的模型参数")
+        elif self.config["llm_provider"].lower() == "codex":
+            logger.info("🔧 [Codex CLI] 通过统一工厂创建本地 Codex CLI 适配器")
+
+            self.deep_thinking_llm = create_llm_by_provider(
+                provider="codex",
+                model=self.config["deep_think_llm"],
+                backend_url=self.config.get("backend_url", "local://codex-cli"),
+                temperature=deep_temperature,
+                max_tokens=deep_max_tokens,
+                timeout=deep_timeout,
+                model_config=deep_config,
+            )
+            self.quick_thinking_llm = create_llm_by_provider(
+                provider="codex",
+                model=self.config["quick_think_llm"],
+                backend_url=self.config.get("backend_url", "local://codex-cli"),
+                temperature=quick_temperature,
+                max_tokens=quick_max_tokens,
+                timeout=quick_timeout,
+                model_config=quick_config,
+            )
+
+            logger.info("✅ [Codex CLI] 本地 CLI 适配器初始化完成")
         else:
             # 🔧 通用的 OpenAI 兼容厂家支持（用于自定义厂家）
             logger.info(f"🔧 使用通用 OpenAI 兼容适配器处理自定义厂家: {self.config['llm_provider']}")

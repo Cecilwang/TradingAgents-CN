@@ -184,6 +184,15 @@ DEFAULT_MODEL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "description": "O4 Mini，新一代推理模型"
     },
     
+    "gpt-5.4": {
+        "capability_level": 5,
+        "suitable_roles": [ModelRole.BOTH],
+        "features": [ModelFeature.TOOL_CALLING, ModelFeature.REASONING, ModelFeature.LONG_CONTEXT],
+        "recommended_depths": ["标准", "深度", "全面"],
+        "performance_metrics": {"speed": 3, "cost": 2, "quality": 5},
+        "description": "GPT-5.4，适合复杂推理、工具调用和高质量综合分析"
+    },
+    
     # ==================== DeepSeek ====================
     "deepseek-chat": {
         "capability_level": 3,
@@ -455,4 +464,3 @@ def parse_aggregator_model(model_name: str) -> Tuple[str, str]:
         parts = model_name.split("/", 1)
         return parts[0], parts[1]
     return "", model_name
-

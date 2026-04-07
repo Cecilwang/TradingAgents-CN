@@ -50,6 +50,26 @@ logger = logging.getLogger("app.services.simple_analysis_service")
 config_service = ConfigService()
 
 
+def _normalize_provider_name(provider: Any) -> str:
+    """统一兼容枚举和字符串形式的厂家名称。"""
+    if hasattr(provider, "value"):
+        return str(provider.value)
+    return str(provider)
+
+
+def _select_model_match_by_provider(matches: List[Any], preferred_provider: str = "") -> Any:
+    """在同名模型中优先选择默认厂家对应的配置。"""
+    normalized_preferred_provider = str(preferred_provider or "").lower()
+    if normalized_preferred_provider:
+        for match in matches:
+            provider_name = _normalize_provider_name(
+                getattr(match, "provider", None) if hasattr(match, "provider") else match.get("provider", "")
+            ).lower()
+            if provider_name == normalized_preferred_provider:
+                return match
+    return matches[0]
+
+
 async def get_provider_by_model_name(model_name: str) -> str:
     """
     根据模型名称从数据库配置中查找对应的供应商（异步版本）
@@ -67,12 +87,19 @@ async def get_provider_by_model_name(model_name: str) -> str:
             logger.warning(f"⚠️ 系统配置为空，使用默认供应商映射")
             return _get_default_provider_by_model(model_name)
 
-        # 在LLM配置中查找匹配的模型
-        for llm_config in system_config.llm_configs:
-            if llm_config.model_name == model_name:
-                provider = llm_config.provider.value if hasattr(llm_config.provider, 'value') else str(llm_config.provider)
+        matches = [
+            llm_config for llm_config in system_config.llm_configs
+            if llm_config.model_name == model_name
+        ]
+        if matches:
+            preferred_provider = (getattr(system_config, "system_settings", {}) or {}).get("default_provider", "")
+            selected_match = _select_model_match_by_provider(matches, preferred_provider)
+            provider = _normalize_provider_name(selected_match.provider)
+            if len(matches) > 1:
+                logger.warning(f"⚠️ 模型 {model_name} 存在多个供应商配置，优先使用厂家: {provider}")
+            else:
                 logger.info(f"✅ 从数据库找到模型 {model_name} 的供应商: {provider}")
-                return provider
+            return provider
 
         # 如果数据库中没有找到，使用默认映射
         logger.warning(f"⚠️ 数据库中未找到模型 {model_name}，使用默认映射")
@@ -122,54 +149,64 @@ def get_provider_and_url_by_model_sync(model_name: str) -> dict:
 
         if doc and "llm_configs" in doc:
             llm_configs = doc["llm_configs"]
+            matches = [
+                config_dict for config_dict in llm_configs
+                if config_dict.get("model_name") == model_name
+            ]
 
-            for config_dict in llm_configs:
-                if config_dict.get("model_name") == model_name:
-                    provider = config_dict.get("provider")
-                    api_base = config_dict.get("api_base")
-                    model_api_key = config_dict.get("api_key")  # 🔥 获取模型配置的 API Key
+            if matches:
+                preferred_provider = (doc.get("system_settings") or {}).get("default_provider", "")
+                selected_config = _select_model_match_by_provider(matches, preferred_provider)
+                if len(matches) > 1:
+                    logger.warning(
+                        f"⚠️ [同步查询] 模型 {model_name} 存在多个供应商配置，优先使用厂家: {selected_config.get('provider')}"
+                    )
 
-                    # 从 llm_providers 集合中查找厂家配置
-                    providers_collection = db.llm_providers
-                    provider_doc = providers_collection.find_one({"name": provider})
+                provider = selected_config.get("provider")
+                api_base = selected_config.get("api_base")
+                model_api_key = selected_config.get("api_key")  # 🔥 获取模型配置的 API Key
 
-                    # 🔥 确定 API Key（优先级：模型配置 > 厂家配置 > 环境变量）
-                    api_key = None
-                    if model_api_key and model_api_key.strip() and model_api_key != "your-api-key":
-                        api_key = model_api_key
-                        logger.info(f"✅ [同步查询] 使用模型配置的 API Key")
-                    elif provider_doc and provider_doc.get("api_key"):
-                        provider_api_key = provider_doc["api_key"]
-                        if provider_api_key and provider_api_key.strip() and provider_api_key != "your-api-key":
-                            api_key = provider_api_key
-                            logger.info(f"✅ [同步查询] 使用厂家配置的 API Key")
+                # 从 llm_providers 集合中查找厂家配置
+                providers_collection = db.llm_providers
+                provider_doc = providers_collection.find_one({"name": provider})
 
-                    # 如果数据库中没有有效的 API Key，尝试从环境变量获取
-                    if not api_key:
-                        api_key = _get_env_api_key_for_provider(provider)
-                        if api_key:
-                            logger.info(f"✅ [同步查询] 使用环境变量的 API Key")
-                        else:
-                            logger.warning(f"⚠️ [同步查询] 未找到 {provider} 的 API Key")
+                # 🔥 确定 API Key（优先级：模型配置 > 厂家配置 > 环境变量）
+                api_key = None
+                if model_api_key and model_api_key.strip() and model_api_key != "your-api-key":
+                    api_key = model_api_key
+                    logger.info(f"✅ [同步查询] 使用模型配置的 API Key")
+                elif provider_doc and provider_doc.get("api_key"):
+                    provider_api_key = provider_doc["api_key"]
+                    if provider_api_key and provider_api_key.strip() and provider_api_key != "your-api-key":
+                        api_key = provider_api_key
+                        logger.info(f"✅ [同步查询] 使用厂家配置的 API Key")
 
-                    # 确定 backend_url
-                    backend_url = None
-                    if api_base:
-                        backend_url = api_base
-                        logger.info(f"✅ [同步查询] 模型 {model_name} 使用自定义 API: {api_base}")
-                    elif provider_doc and provider_doc.get("default_base_url"):
-                        backend_url = provider_doc["default_base_url"]
-                        logger.info(f"✅ [同步查询] 模型 {model_name} 使用厂家默认 API: {backend_url}")
+                # 如果数据库中没有有效的 API Key，尝试从环境变量获取
+                if not api_key:
+                    api_key = _get_env_api_key_for_provider(provider)
+                    if api_key:
+                        logger.info(f"✅ [同步查询] 使用环境变量的 API Key")
                     else:
-                        backend_url = _get_default_backend_url(provider)
-                        logger.warning(f"⚠️ [同步查询] 厂家 {provider} 没有配置 default_base_url，使用硬编码默认值")
+                        logger.warning(f"⚠️ [同步查询] 未找到 {provider} 的 API Key")
 
-                    client.close()
-                    return {
-                        "provider": provider,
-                        "backend_url": backend_url,
-                        "api_key": api_key
-                    }
+                # 确定 backend_url
+                backend_url = None
+                if api_base:
+                    backend_url = api_base
+                    logger.info(f"✅ [同步查询] 模型 {model_name} 使用自定义 API: {api_base}")
+                elif provider_doc and provider_doc.get("default_base_url"):
+                    backend_url = provider_doc["default_base_url"]
+                    logger.info(f"✅ [同步查询] 模型 {model_name} 使用厂家默认 API: {backend_url}")
+                else:
+                    backend_url = _get_default_backend_url(provider)
+                    logger.warning(f"⚠️ [同步查询] 厂家 {provider} 没有配置 default_base_url，使用硬编码默认值")
+
+                client.close()
+                return {
+                    "provider": provider,
+                    "backend_url": backend_url,
+                    "api_key": api_key
+                }
 
         client.close()
 
@@ -313,6 +350,7 @@ def _get_default_backend_url(provider: str) -> str:
         str: 默认的 backend_url
     """
     default_urls = {
+        "codex": "local://codex-cli",
         "google": "https://generativelanguage.googleapis.com/v1beta",
         "dashscope": "https://dashscope.aliyuncs.com/api/v1",
         "openai": "https://api.openai.com/v1",
@@ -523,6 +561,8 @@ def create_analysis_config(
             config["backend_url"] = "https://api.openai.com/v1"
         elif llm_provider == "google":
             config["backend_url"] = "https://generativelanguage.googleapis.com/v1beta"
+        elif llm_provider == "codex":
+            config["backend_url"] = "local://codex-cli"
         elif llm_provider == "qianfan":
             config["backend_url"] = "https://aip.baidubce.com"
         else:
@@ -566,6 +606,13 @@ def create_analysis_config(
                    f"temperature={quick_model_config.get('temperature')}, "
                    f"timeout={quick_model_config.get('timeout')}, "
                    f"retry_times={quick_model_config.get('retry_times')}")
+        if llm_provider == "codex":
+            logger.info(
+                f"🔧 [快速模型-Codex CLI] reasoning_effort={quick_model_config.get('reasoning_effort')}, "
+                f"fast_mode={quick_model_config.get('fast_mode')}, "
+                f"ask_for_approval={quick_model_config.get('ask_for_approval')}, "
+                f"sandbox_mode={quick_model_config.get('sandbox_mode')}"
+            )
 
     if deep_model_config:
         config["deep_model_config"] = deep_model_config
@@ -573,6 +620,13 @@ def create_analysis_config(
                    f"temperature={deep_model_config.get('temperature')}, "
                    f"timeout={deep_model_config.get('timeout')}, "
                    f"retry_times={deep_model_config.get('retry_times')}")
+        if llm_provider == "codex":
+            logger.info(
+                f"🔧 [深度模型-Codex CLI] reasoning_effort={deep_model_config.get('reasoning_effort')}, "
+                f"fast_mode={deep_model_config.get('fast_mode')}, "
+                f"ask_for_approval={deep_model_config.get('ask_for_approval')}, "
+                f"sandbox_mode={deep_model_config.get('sandbox_mode')}"
+            )
 
     logger.info(f"📋 ========== 创建分析配置完成 ==========")
     logger.info(f"   🎯 研究深度: {research_depth}")

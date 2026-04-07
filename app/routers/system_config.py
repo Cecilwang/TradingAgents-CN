@@ -5,6 +5,7 @@ import logging
 
 from app.core.config import settings
 from app.routers.auth_db import get_current_user
+from tradingagents.llm_adapters.codex_cli_adapter import get_codex_cli_status
 
 router = APIRouter()
 logger = logging.getLogger("webapi")
@@ -136,6 +137,26 @@ async def validate_config():
                     "mongodb_configured": False,  # MongoDB 是否配置
                     "env_configured": False  # 环境变量是否配置
                 }
+
+                # 本地 Codex CLI 厂家不依赖 API Key，直接检查命令状态。
+                if provider.name == "codex":
+                    codex_status = get_codex_cli_status()
+                    validation_item["has_api_key"] = codex_status["available"]
+                    validation_item["mongodb_configured"] = codex_status["available"]
+                    validation_item["env_configured"] = codex_status["available"]
+                    validation_item["source"] = "local_cli"
+
+                    if codex_status["available"]:
+                        version = codex_status["version"]
+                        validation_item["status"] = f"已配置（本地 CLI）{f' - {version}' if version else ''}"
+                    else:
+                        validation_item["status"] = "未配置（本地 CLI 不可用）"
+                        mongodb_validation["warnings"].append(
+                            "大模型厂家 Codex CLI 已启用，但当前机器未检测到可用的 `codex` 命令"
+                        )
+
+                    mongodb_validation["llm_providers"].append(validation_item)
+                    continue
 
                 # 🔥 关键：检查数据库中的原始 API Key 是否有效
                 db_key_valid = is_valid_api_key(provider.api_key)

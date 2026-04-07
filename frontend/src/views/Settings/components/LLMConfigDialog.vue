@@ -86,7 +86,7 @@
         </div>
       </el-form-item>
 
-      <el-form-item label="API基础URL" prop="api_base">
+      <el-form-item v-if="!isCodexProvider" label="API基础URL" prop="api_base">
         <el-input
           v-model="formData.api_base"
           placeholder="可选，自定义API端点（留空使用厂家默认地址）"
@@ -97,77 +97,120 @@
       </el-form-item>
 
       <!-- 模型参数 -->
-      <el-divider content-position="left">模型参数</el-divider>
+      <el-divider content-position="left">{{ isCodexProvider ? 'Codex CLI 配置' : '模型参数' }}</el-divider>
 
-      <el-form-item label="最大Token数" prop="max_tokens">
-        <el-input-number
-          v-model="formData.max_tokens"
-          :min="100"
-          :max="32000"
-          :step="100"
-        />
-      </el-form-item>
+      <template v-if="isCodexProvider">
+        <el-form-item label="推理强度" prop="reasoning_effort">
+          <el-select
+            v-model="formData.reasoning_effort"
+            clearable
+            placeholder="留空则沿用本机 Codex CLI 默认值"
+          >
+            <el-option label="Low" value="low" />
+            <el-option label="Medium" value="medium" />
+            <el-option label="High" value="high" />
+            <el-option label="XHigh" value="xhigh" />
+          </el-select>
+          <div class="form-tip">
+            留空时不传递 reasoning effort，直接沿用本机 Codex CLI 当前默认配置。
+          </div>
+        </el-form-item>
 
-      <el-form-item label="温度参数" prop="temperature">
-        <el-input-number
-          v-model="formData.temperature"
-          :min="0"
-          :max="2"
-          :step="0.1"
-          :precision="1"
-        />
-      </el-form-item>
+        <el-form-item label="Fast Mode" prop="fast_mode">
+          <el-switch v-model="formData.fast_mode" />
+          <div class="form-tip">
+            开启时强制覆盖为 fast service tier；关闭时沿用本机 Codex CLI 默认值。
+          </div>
+        </el-form-item>
 
-      <el-form-item label="超时时间" prop="timeout">
-        <el-input-number
-          v-model="formData.timeout"
-          :min="10"
-          :max="300"
-          :step="10"
-        />
-        <span class="ml-2 text-gray-500">秒</span>
-      </el-form-item>
+        <el-form-item label="审批策略" prop="ask_for_approval">
+          <el-select v-model="formData.ask_for_approval" placeholder="选择 ask-for-approval">
+            <el-option label="Never" value="never" />
+            <el-option label="On Request" value="on-request" />
+            <el-option label="Untrusted" value="untrusted" />
+          </el-select>
+        </el-form-item>
 
-      <el-form-item label="重试次数" prop="retry_times">
-        <el-input-number
-          v-model="formData.retry_times"
-          :min="0"
-          :max="10"
-        />
-      </el-form-item>
+        <el-form-item label="沙箱模式" prop="sandbox_mode">
+          <el-select v-model="formData.sandbox_mode" placeholder="选择 sandbox">
+            <el-option label="Read Only" value="read-only" />
+            <el-option label="Workspace Write" value="workspace-write" />
+            <el-option label="Danger Full Access" value="danger-full-access" />
+          </el-select>
+        </el-form-item>
+      </template>
 
-      <!-- 定价配置 -->
-      <el-divider content-position="left">定价配置</el-divider>
+      <template v-else>
+        <el-form-item label="最大Token数" prop="max_tokens">
+          <el-input-number
+            v-model="formData.max_tokens"
+            :min="100"
+            :max="32000"
+            :step="100"
+          />
+        </el-form-item>
 
-      <el-form-item label="输入价格" prop="input_price_per_1k">
-        <el-input-number
-          v-model="formData.input_price_per_1k"
-          :min="0"
-          :step="0.0001"
-          :controls="false"
-          placeholder="每1000个token的价格"
-        />
-        <span class="ml-2 text-gray-500">{{ formData.currency || 'CNY' }}/1K tokens</span>
-      </el-form-item>
+        <el-form-item label="温度参数" prop="temperature">
+          <el-input-number
+            v-model="formData.temperature"
+            :min="0"
+            :max="2"
+            :step="0.1"
+            :precision="1"
+          />
+        </el-form-item>
 
-      <el-form-item label="输出价格" prop="output_price_per_1k">
-        <el-input-number
-          v-model="formData.output_price_per_1k"
-          :min="0"
-          :step="0.0001"
-          :controls="false"
-          placeholder="每1000个token的价格"
-        />
-        <span class="ml-2 text-gray-500">{{ formData.currency || 'CNY' }}/1K tokens</span>
-      </el-form-item>
+        <el-form-item label="超时时间" prop="timeout">
+          <el-input-number
+            v-model="formData.timeout"
+            :min="10"
+            :max="300"
+            :step="10"
+          />
+          <span class="ml-2 text-gray-500">秒</span>
+        </el-form-item>
 
-      <el-form-item label="货币单位" prop="currency">
-        <el-select v-model="formData.currency" placeholder="选择货币单位">
-          <el-option label="人民币 (CNY)" value="CNY" />
-          <el-option label="美元 (USD)" value="USD" />
-          <el-option label="欧元 (EUR)" value="EUR" />
-        </el-select>
-      </el-form-item>
+        <el-form-item label="重试次数" prop="retry_times">
+          <el-input-number
+            v-model="formData.retry_times"
+            :min="0"
+            :max="10"
+          />
+        </el-form-item>
+
+        <!-- 定价配置 -->
+        <el-divider content-position="left">定价配置</el-divider>
+
+        <el-form-item label="输入价格" prop="input_price_per_1k">
+          <el-input-number
+            v-model="formData.input_price_per_1k"
+            :min="0"
+            :step="0.0001"
+            :controls="false"
+            placeholder="每1000个token的价格"
+          />
+          <span class="ml-2 text-gray-500">{{ formData.currency || 'CNY' }}/1K tokens</span>
+        </el-form-item>
+
+        <el-form-item label="输出价格" prop="output_price_per_1k">
+          <el-input-number
+            v-model="formData.output_price_per_1k"
+            :min="0"
+            :step="0.0001"
+            :controls="false"
+            placeholder="每1000个token的价格"
+          />
+          <span class="ml-2 text-gray-500">{{ formData.currency || 'CNY' }}/1K tokens</span>
+        </el-form-item>
+
+        <el-form-item label="货币单位" prop="currency">
+          <el-select v-model="formData.currency" placeholder="选择货币单位">
+            <el-option label="人民币 (CNY)" value="CNY" />
+            <el-option label="美元 (USD)" value="USD" />
+            <el-option label="欧元 (EUR)" value="EUR" />
+          </el-select>
+        </el-form-item>
+      </template>
 
       <!-- 高级设置 -->
       <el-divider content-position="left">高级设置</el-divider>
@@ -176,29 +219,31 @@
         <el-switch v-model="formData.enabled" />
       </el-form-item>
 
-      <el-form-item label="启用记忆功能">
-        <el-switch v-model="formData.enable_memory" />
-      </el-form-item>
+      <template v-if="!isCodexProvider">
+        <el-form-item label="启用记忆功能">
+          <el-switch v-model="formData.enable_memory" />
+        </el-form-item>
 
-      <el-form-item label="启用调试模式">
-        <el-switch v-model="formData.enable_debug" />
-      </el-form-item>
+        <el-form-item label="启用调试模式">
+          <el-switch v-model="formData.enable_debug" />
+        </el-form-item>
 
-      <el-form-item label="优先级" prop="priority">
-        <el-input-number
-          v-model="formData.priority"
-          :min="0"
-          :max="100"
-        />
-        <span class="ml-2 text-gray-500">数值越大优先级越高</span>
-      </el-form-item>
+        <el-form-item label="优先级" prop="priority">
+          <el-input-number
+            v-model="formData.priority"
+            :min="0"
+            :max="100"
+          />
+          <span class="ml-2 text-gray-500">数值越大优先级越高</span>
+        </el-form-item>
 
-      <el-form-item label="模型类别" prop="model_category">
-        <el-input
-          v-model="formData.model_category"
-          placeholder="可选，用于OpenRouter等分类"
-        />
-      </el-form-item>
+        <el-form-item label="模型类别" prop="model_category">
+          <el-input
+            v-model="formData.model_category"
+            placeholder="可选，用于OpenRouter等分类"
+          />
+        </el-form-item>
+      </template>
 
       <el-form-item label="描述" prop="description">
         <el-input
@@ -210,7 +255,8 @@
       </el-form-item>
 
       <!-- 🆕 模型能力配置 -->
-      <el-divider content-position="left">模型能力配置</el-divider>
+      <template>
+        <el-divider content-position="left">模型能力配置</el-divider>
 
       <el-form-item label="能力等级" prop="capability_level">
         <el-select v-model="formData.capability_level" placeholder="选择模型能力等级">
@@ -334,6 +380,7 @@
           💡 工具调用是必需特性，推理能力对深度分析很重要
         </div>
       </el-form-item>
+      </template>
     </el-form>
 
     <template #footer>
@@ -378,6 +425,7 @@ const availableProviders = ref<LLMProvider[]>([])
 
 // Computed
 const isEdit = computed(() => !!props.config)
+const isCodexProvider = computed(() => formData.value.provider === 'codex')
 
 // 表单数据
 const defaultFormData = {
@@ -390,6 +438,10 @@ const defaultFormData = {
   timeout: 180,  // 默认超时时间改为180秒
   retry_times: 3,
   enabled: true,
+  reasoning_effort: '',
+  fast_mode: false,
+  ask_for_approval: 'never',
+  sandbox_mode: 'read-only',
   enable_memory: false,
   enable_debug: false,
   priority: 0,
@@ -410,6 +462,18 @@ const defaultFormData = {
   }
 }
 
+const codexCapabilityDefaults: Partial<typeof defaultFormData> = {
+  capability_level: 5,
+  suitable_roles: ['both'],
+  features: ['tool_calling', 'reasoning', 'long_context'],
+  recommended_depths: ['标准', '深度', '全面'],
+  performance_metrics: {
+    speed: 3,
+    cost: 2,
+    quality: 5
+  }
+}
+
 const formData = ref({ ...defaultFormData })
 
 // 用于跟踪当前选择的模型（用于下拉列表）
@@ -419,10 +483,6 @@ const selectedModelKey = ref<string>('')
 const rules: FormRules = {
   provider: [{ required: true, message: '请选择供应商', trigger: 'change' }],
   model_name: [{ required: true, message: '请输入模型名称', trigger: 'blur' }],
-  max_tokens: [{ required: true, message: '请输入最大Token数', trigger: 'blur' }],
-  temperature: [{ required: true, message: '请输入温度参数', trigger: 'blur' }],
-  timeout: [{ required: true, message: '请输入超时时间', trigger: 'blur' }],
-  retry_times: [{ required: true, message: '请输入重试次数', trigger: 'blur' }],
   priority: [{ required: true, message: '请输入优先级', trigger: 'blur' }]
 }
 
@@ -488,6 +548,31 @@ const getModelInfo = (provider: string, modelName: string): ModelInfo | null => 
   return models.find(m => m.name === modelName) || null
 }
 
+const normalizeCodexFormData = (config: Partial<LLMConfig>) => {
+  if (config.provider !== 'codex') {
+    return config
+  }
+
+  return {
+    ...codexCapabilityDefaults,
+    ...config,
+    api_base: '',
+    max_tokens: 4000,
+    temperature: 0.7,
+    timeout: 180,
+    retry_times: 3,
+    reasoning_effort: config.reasoning_effort || '',
+    fast_mode: Boolean(config.fast_mode),
+    ask_for_approval: config.ask_for_approval || 'never',
+    sandbox_mode: config.sandbox_mode || 'read-only',
+    capability_level: config.capability_level ?? codexCapabilityDefaults.capability_level,
+    suitable_roles: config.suitable_roles || codexCapabilityDefaults.suitable_roles,
+    features: config.features || codexCapabilityDefaults.features,
+    recommended_depths: config.recommended_depths || codexCapabilityDefaults.recommended_depths,
+    performance_metrics: config.performance_metrics || codexCapabilityDefaults.performance_metrics
+  }
+}
+
 // 处理供应商变更
 const handleProviderChange = async (provider: string) => {
   // 先尝试从已加载的目录中获取
@@ -508,10 +593,15 @@ const handleProviderChange = async (provider: string) => {
   }
 
   formData.value.model_name = ''
+  formData.value.model_display_name = ''
   // 清空价格信息
   formData.value.input_price_per_1k = 0
   formData.value.output_price_per_1k = 0
   formData.value.currency = 'CNY'
+
+  if (provider === 'codex') {
+    Object.assign(formData.value, normalizeCodexFormData(formData.value))
+  }
 }
 
 // 处理从下拉列表选择模型
@@ -553,6 +643,10 @@ const handleModelSelect = (modelCode: string) => {
     } else {
       ElMessage.success('已填充模型名称')
     }
+
+    if (formData.value.provider === 'codex') {
+      Object.assign(formData.value, normalizeCodexFormData(formData.value))
+    }
   }
 }
 
@@ -563,7 +657,7 @@ watch(
     if (config) {
       // 编辑模式：先使用默认值，再用配置覆盖
       // 注意：对于数字类型的字段，即使是 0 也应该保留
-      formData.value = {
+      formData.value = normalizeCodexFormData({
         ...defaultFormData,
         ...config,
         // 确保价格字段正确加载，即使是 0 也要保留
@@ -578,7 +672,7 @@ watch(
         features: config.features || defaultFormData.features,
         recommended_depths: config.recommended_depths || defaultFormData.recommended_depths,
         performance_metrics: config.performance_metrics || defaultFormData.performance_metrics
-      }
+      }) as typeof defaultFormData
       modelOptions.value = getModelOptions(config.provider)
 
       // 如果有 model_name，尝试在下拉列表中选中它
@@ -609,7 +703,7 @@ watch(
 
       if (props.config) {
         // 编辑模式：先使用默认值，再用配置覆盖
-        formData.value = {
+        formData.value = normalizeCodexFormData({
           ...defaultFormData,
           ...props.config,
           // 确保价格字段正确加载，即使是 0 也要保留
@@ -624,7 +718,7 @@ watch(
           features: props.config.features || defaultFormData.features,
           recommended_depths: props.config.recommended_depths || defaultFormData.recommended_depths,
           performance_metrics: props.config.performance_metrics || defaultFormData.performance_metrics
-        }
+        }) as typeof defaultFormData
         modelOptions.value = getModelOptions(props.config.provider)
 
         // 如果有 model_name，尝试在下拉列表中选中它
@@ -676,7 +770,7 @@ const handleSubmit = async () => {
     loading.value = true
 
     // 准备提交数据，移除api_key字段（由后端从厂家配置获取）
-    const submitData = { ...formData.value }
+    const submitData = normalizeCodexFormData({ ...formData.value })
     // 使用类型安全的方式移除api_key字段（如果存在的话）
     if ('api_key' in submitData) {
       delete (submitData as any).api_key  // 不发送api_key，让后端从厂家配置获取

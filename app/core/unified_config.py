@@ -92,7 +92,10 @@ class UnifiedConfigManager:
     
     def get_legacy_models(self) -> List[Dict[str, Any]]:
         """获取传统格式的模型配置"""
-        return self._load_json_file(self.paths.models_json, "models")
+        models = self._load_json_file(self.paths.models_json, "models")
+        if isinstance(models, list):
+            return models
+        return []
     
     def get_llm_configs(self) -> List[LLMConfig]:
         """获取标准化的LLM配置"""
@@ -108,12 +111,24 @@ class UnifiedConfigManager:
                 llm_config = LLMConfig(
                     provider=provider,
                     model_name=model.get("model_name", ""),
+                    model_display_name=model.get("model_display_name"),
                     api_key="",
                     api_base=model.get("base_url"),
                     max_tokens=model.get("max_tokens", 4000),
                     temperature=model.get("temperature", 0.7),
+                    timeout=model.get("timeout", 180),
+                    retry_times=model.get("retry_times", 3),
+                    reasoning_effort=model.get("reasoning_effort"),
+                    fast_mode=model.get("fast_mode", False),
+                    ask_for_approval=model.get("ask_for_approval", "never"),
+                    sandbox_mode=model.get("sandbox_mode", "read-only"),
                     enabled=model.get("enabled", True),
-                    description=f"{model.get('provider', '')} {model.get('model_name', '')}"
+                    description=model.get("description") or f"{model.get('provider', '')} {model.get('model_name', '')}",
+                    capability_level=model.get("capability_level", 2),
+                    suitable_roles=model.get("suitable_roles", ["both"]),
+                    features=model.get("features", []),
+                    recommended_depths=model.get("recommended_depths", ["快速", "基础", "标准"]),
+                    performance_metrics=model.get("performance_metrics")
                 )
                 llm_configs.append(llm_config)
             except Exception as e:
@@ -132,10 +147,23 @@ class UnifiedConfigManager:
             legacy_model = {
                 "provider": llm_config.provider,
                 "model_name": llm_config.model_name,
+                "model_display_name": llm_config.model_display_name,
                 "api_key": "",
                 "base_url": llm_config.api_base,
                 "max_tokens": llm_config.max_tokens,
                 "temperature": llm_config.temperature,
+                "timeout": llm_config.timeout,
+                "retry_times": llm_config.retry_times,
+                "reasoning_effort": llm_config.reasoning_effort,
+                "fast_mode": llm_config.fast_mode,
+                "ask_for_approval": llm_config.ask_for_approval,
+                "sandbox_mode": llm_config.sandbox_mode,
+                "description": llm_config.description,
+                "capability_level": llm_config.capability_level,
+                "suitable_roles": llm_config.suitable_roles,
+                "features": llm_config.features,
+                "recommended_depths": llm_config.recommended_depths,
+                "performance_metrics": llm_config.performance_metrics,
                 "enabled": llm_config.enabled
             }
             

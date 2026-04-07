@@ -6,6 +6,7 @@ import logging
 from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from app.constants.model_capabilities import DEFAULT_MODEL_CAPABILITIES
 
 from app.routers.auth_db import get_current_user
 from app.models.user import User
@@ -30,6 +31,18 @@ from app.services.config_provider import provider as config_provider
 
 router = APIRouter(prefix="/config", tags=["配置管理"])
 logger = logging.getLogger("webapi")
+
+
+def _get_codex_capability_defaults(model_name: str) -> Dict[str, Any]:
+    """获取 Codex 模型的默认能力元数据。"""
+    defaults = DEFAULT_MODEL_CAPABILITIES.get(model_name) or DEFAULT_MODEL_CAPABILITIES["gpt-5.4"]
+    return {
+        "capability_level": defaults["capability_level"],
+        "suitable_roles": [role.value for role in defaults["suitable_roles"]],
+        "features": [feature.value for feature in defaults["features"]],
+        "recommended_depths": list(defaults["recommended_depths"]),
+        "performance_metrics": defaults["performance_metrics"]
+    }
 
 
 # ===== 配置重载端点 =====
@@ -259,7 +272,7 @@ async def get_llm_providers(
                     api_secret=api_secret_display,
                     extra_config={
                         **provider.extra_config,
-                        "has_api_key": bool(api_key_display),
+                        "has_api_key": provider.extra_config.get("has_api_key", bool(api_key_display)),
                         "has_api_secret": bool(api_secret_display)
                     },
                     created_at=provider.created_at,
@@ -629,6 +642,40 @@ async def add_llm_config(
             # 如果是无效的 Key，则清空（让系统使用环境变量）
             if not api_key or api_key.startswith('your_') or api_key.startswith('your-') or len(api_key) <= 10:
                 llm_config_data['api_key'] = ""
+
+        if str(llm_config_data.get("provider", "")).lower() == "codex":
+            llm_config_data["api_key"] = ""
+            llm_config_data["api_base"] = ""
+            llm_config_data["max_tokens"] = 4000
+            llm_config_data["temperature"] = 0.7
+            llm_config_data["timeout"] = 180
+            llm_config_data["retry_times"] = 3
+            llm_config_data["reasoning_effort"] = llm_config_data.get("reasoning_effort") or None
+            llm_config_data["fast_mode"] = bool(llm_config_data.get("fast_mode", False))
+            llm_config_data["ask_for_approval"] = llm_config_data.get("ask_for_approval") or "never"
+            llm_config_data["sandbox_mode"] = llm_config_data.get("sandbox_mode") or "read-only"
+
+            codex_capability_defaults = _get_codex_capability_defaults(
+                llm_config_data.get("model_name") or "gpt-5.4"
+            )
+            if llm_config_data.get("capability_level") is None:
+                llm_config_data["capability_level"] = codex_capability_defaults["capability_level"]
+            llm_config_data["suitable_roles"] = (
+                llm_config_data.get("suitable_roles")
+                or codex_capability_defaults["suitable_roles"]
+            )
+            llm_config_data["features"] = (
+                llm_config_data.get("features")
+                or codex_capability_defaults["features"]
+            )
+            llm_config_data["recommended_depths"] = (
+                llm_config_data.get("recommended_depths")
+                or codex_capability_defaults["recommended_depths"]
+            )
+            llm_config_data["performance_metrics"] = (
+                llm_config_data.get("performance_metrics")
+                or codex_capability_defaults["performance_metrics"]
+            )
 
 
         # 尝试创建LLMConfig对象

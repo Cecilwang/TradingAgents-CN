@@ -148,13 +148,14 @@
                 :key="index"
                 class="config-item"
                 :class="{
-                  'is-valid': item.status === '已配置',
-                  'is-warning': item.status === '未配置或占位符'
+                  'is-valid': isConfiguredStatus(item.status),
+                  'is-warning': !isConfiguredStatus(item.status) && item.is_active
                 }"
               >
                 <div class="item-icon">
-                  <el-icon v-if="item.status === '已配置'" color="#67C23A"><CircleCheck /></el-icon>
-                  <el-icon v-else color="#E6A23C"><Warning /></el-icon>
+                  <el-icon v-if="isConfiguredStatus(item.status)" color="#67C23A"><CircleCheck /></el-icon>
+                  <el-icon v-else-if="item.is_active" color="#E6A23C"><Warning /></el-icon>
+                  <el-icon v-else color="#909399"><CircleClose /></el-icon>
                 </div>
                 <div class="item-content">
                   <div class="item-name">{{ item.display_name }}</div>
@@ -162,7 +163,7 @@
                 </div>
                 <div class="item-status">
                   <el-tag
-                    :type="item.status === '已配置' ? 'success' : item.enabled ? 'warning' : 'info'"
+                    :type="isConfiguredStatus(item.status) ? 'success' : item.is_active ? 'warning' : 'info'"
                     size="small"
                   >
                     {{ item.status }}
@@ -312,6 +313,7 @@ interface MongoDBValidationResult {
     is_active: boolean
     has_api_key: boolean
     status: string
+    source?: 'database' | 'environment' | 'local_cli'
   }>
   data_source_configs?: Array<{
     name: string
@@ -343,6 +345,8 @@ const hasRecommendedWarnings = computed(() => {
   const hasMongodbWarnings = (mongodbValidation.value?.warnings?.length ?? 0) > 0
   return hasMissingRecommended || hasMongodbWarnings
 })
+
+const isConfiguredStatus = (status: string) => status.includes('已配置')
 
 // 方法
 const handleValidate = async () => {
@@ -633,4 +637,3 @@ onMounted(() => {
   }
 }
 </style>
-

@@ -102,22 +102,26 @@
       <el-alert
         title="🔒 安全提示"
         type="info"
-        description="敏感密钥通过环境变量/运维配置注入，出于安全考虑，此处不存储或展示真实密钥。"
+        :description="isLocalCliProvider ? 'Codex CLI 走本机 `codex exec`，不依赖远端 API Key。请先在部署机器确认 `codex --version` 可执行。' : '敏感密钥通过环境变量/运维配置注入，出于安全考虑，此处不存储或展示真实密钥。'"
         show-icon
         :closable="false"
         class="mb-2"
       />
-      <el-form-item label="密钥状态">
+      <el-form-item :label="isLocalCliProvider ? '接入状态' : '密钥状态'">
         <el-tag :type="(props.provider?.extra_config?.has_api_key ? 'success' : 'danger')" size="small">
-          {{ props.provider?.extra_config?.has_api_key ? '已配置' : '未配置' }}
+          {{ getProviderReadyText() }}
         </el-tag>
-        <el-tag v-if="props.provider?.extra_config?.has_api_key" :type="props.provider?.extra_config?.source === 'environment' ? 'warning' : 'success'" size="small" class="ml-2">
-          {{ props.provider?.extra_config?.source === 'environment' ? 'ENV' : '已配置' }}
+        <el-tag
+          v-if="props.provider?.extra_config?.source"
+          :type="getProviderSourceTagType()"
+          size="small"
+          class="ml-2"
+        >
+          {{ getProviderSourceTagText() }}
         </el-tag>
       </el-form-item>
 
-      <!-- 🔥 新增：API Key 输入框 -->
-      <el-form-item label="API Key" prop="api_key">
+      <el-form-item v-if="!isLocalCliProvider" label="API Key" prop="api_key">
         <el-input
           v-model="formData.api_key"
           type="password"
@@ -130,8 +134,7 @@
         </div>
       </el-form-item>
 
-      <!-- 🔥 新增：API Secret 输入框（某些厂家需要） -->
-      <el-form-item v-if="needsApiSecret" label="API Secret" prop="api_secret">
+      <el-form-item v-if="!isLocalCliProvider && needsApiSecret" label="API Secret" prop="api_secret">
         <el-input
           v-model="formData.api_secret"
           type="password"
@@ -211,6 +214,8 @@ const selectedPreset = ref('')
 // 是否为编辑模式
 const isEdit = computed(() => !!props.provider?.id)
 
+const isLocalCliProvider = computed(() => formData.value.name === 'codex')
+
 // 是否需要API Secret（某些厂家需要）
 const needsApiSecret = computed(() => {
   const providersNeedSecret = ['baidu', 'dashscope', 'qianfan']
@@ -223,6 +228,33 @@ const currentPresetInfo = computed(() => {
   return presetProviders.find(p => p.name === selectedPreset.value)
 })
 
+const getProviderReadyText = () => {
+  if (props.provider?.extra_config?.source === 'local_cli' || isLocalCliProvider.value) {
+    return props.provider?.extra_config?.has_api_key ? 'CLI 就绪' : 'CLI 未就绪'
+  }
+  return props.provider?.extra_config?.has_api_key ? '已配置' : '未配置'
+}
+
+const getProviderSourceTagType = () => {
+  if (props.provider?.extra_config?.source === 'environment') {
+    return 'warning'
+  }
+  if (props.provider?.extra_config?.source === 'local_cli') {
+    return 'info'
+  }
+  return 'success'
+}
+
+const getProviderSourceTagText = () => {
+  if (props.provider?.extra_config?.source === 'environment') {
+    return 'ENV'
+  }
+  if (props.provider?.extra_config?.source === 'local_cli') {
+    return 'LOCAL'
+  }
+  return '已配置'
+}
+
 // 打开注册链接
 const openRegisterUrl = () => {
   if (currentPresetInfo.value?.register_url) {
@@ -232,6 +264,15 @@ const openRegisterUrl = () => {
 
 // 预设厂家数据
 const presetProviders = [
+  {
+    name: 'codex',
+    display_name: 'Codex CLI',
+    description: 'OpenAI Codex CLI 本地命令行适配器，通过本机 `codex exec` 执行分析推理',
+    website: 'https://openai.com/codex/',
+    api_doc_url: 'https://developers.openai.com/codex/cli/',
+    default_base_url: 'local://codex-cli',
+    supported_features: ['chat', 'completion', 'function_calling', 'streaming']
+  },
   {
     name: 'dashscope',
     display_name: '阿里云百炼',
@@ -419,6 +460,11 @@ const handleSubmit = async () => {
 
     // 🔥 修改：处理 API Key 的提交逻辑
     const payload: any = { ...formData.value }
+
+    if (isLocalCliProvider.value) {
+      delete payload.api_key
+      delete payload.api_secret
+    }
 
     // 处理 API Key
     if ('api_key' in payload) {
