@@ -27,7 +27,7 @@ from app.models.analysis import (
 from app.models.user import PyObjectId
 from app.models.notification import NotificationCreate
 from bson import ObjectId
-from app.core.database import get_mongo_db
+from app.core.database import get_mongo_db, get_mongo_db_sync
 from app.services.config_service import ConfigService
 from app.services.memory_state_manager import get_memory_state_manager, TaskStatus
 from app.services.redis_progress_tracker import RedisProgressTracker, get_progress_by_id
@@ -49,6 +49,8 @@ try:
         return _data_source_manager.get_stock_basic_info(stock_code)
 except Exception:
     _get_stock_info_safe = None
+
+_us_yfinance_utils = None
 
 
 def _infer_market_type_from_symbol(stock_code: str) -> str:
@@ -77,6 +79,103 @@ def _resolve_market_type_for_symbol(stock_code: str, requested_market_type: Opti
         )
 
     return inferred_market_type
+
+
+def _normalize_hk_task_symbol(stock_code: str) -> str:
+    """任务中心统一使用 5 位数字.HK 作为港股查询键。"""
+    normalized_code = str(stock_code or "").strip().upper().split(".")[0].lstrip("0").zfill(5)
+    return f"{normalized_code}.HK"
+
+
+def _get_cached_task_stock_name(collection_name: str, query: Dict[str, Any]) -> Optional[str]:
+    """优先从 MongoDB 缓存集合读取股票名称，减少任务中心重复走在线接口。"""
+    try:
+        db = get_mongo_db_sync()
+        cached_info = db[collection_name].find_one(query, sort=[("updated_at", -1)])
+        if cached_info and cached_info.get("name"):
+            return str(cached_info["name"]).strip()
+    except Exception as exc:
+        logger.warning(f"⚠️ 从 {collection_name} 读取任务股票名称失败: {exc}")
+    return None
+
+
+def _get_us_yfinance_utils():
+    """懒加载美股 yfinance 工具，避免服务启动时引入额外依赖开销。"""
+    global _us_yfinance_utils
+    if _us_yfinance_utils is not None:
+        return _us_yfinance_utils
+
+    try:
+        from tradingagents.dataflows.providers.us.yfinance import YFinanceUtils
+        _us_yfinance_utils = YFinanceUtils()
+        return _us_yfinance_utils
+    except Exception as exc:
+        logger.warning(f"⚠️ 初始化美股yfinance工具失败: {exc}")
+        return None
+
+
+def _resolve_stock_name_by_market(code: str) -> Optional[str]:
+    """按市场解析股票名称，任务中心不能再把非A股丢给A股数据源。"""
+    market = StockUtils.identify_stock_market(code)
+
+    try:
+        if market == StockMarket.CHINA_A:
+            if _get_stock_info_safe:
+                info = _get_stock_info_safe(code)
+                if isinstance(info, dict):
+                    return info.get("name")
+            return None
+
+        if market == StockMarket.HONG_KONG:
+            hk_symbol = _normalize_hk_task_symbol(code)
+            hk_code = hk_symbol.split(".")[0]
+
+            cached_name = _get_cached_task_stock_name(
+                "stock_basic_info_hk",
+                {"$or": [{"code": hk_code}, {"symbol": hk_symbol}]},
+            )
+            if cached_name:
+                return cached_name
+
+            from tradingagents.dataflows.interface import get_hk_stock_info_unified
+            info = get_hk_stock_info_unified(hk_symbol)
+            if isinstance(info, dict):
+                return info.get("name")
+            return None
+
+        if market == StockMarket.US:
+            us_symbol = str(code or "").strip().upper()
+
+            cached_name = _get_cached_task_stock_name(
+                "stock_basic_info_us",
+                {"$or": [{"code": us_symbol}, {"symbol": us_symbol}]},
+            )
+            if cached_name:
+                return cached_name
+
+            yfinance_utils = _get_us_yfinance_utils()
+            if yfinance_utils is None:
+                return None
+
+            info = yfinance_utils.get_stock_info(us_symbol)
+            if isinstance(info, dict):
+                return info.get("longName") or info.get("shortName") or info.get("name")
+            return None
+    except Exception as exc:
+        logger.warning(f"⚠️ 按市场解析股票名称失败: {code} - {exc}")
+        return None
+
+    return None
+
+
+def _should_refresh_task_stock_name(code: str, current_name: Optional[str]) -> bool:
+    """任务中心对非A股总是重算名称，避免历史错误名称持续污染列表。"""
+    normalized_name = str(current_name or "").strip()
+    if not code:
+        return False
+    if not normalized_name:
+        return True
+    return StockUtils.identify_stock_market(code) != StockMarket.CHINA_A
 
 
 def _normalize_provider_name(provider: Any) -> str:
@@ -741,10 +840,7 @@ class SimpleAnalysisService:
             return self._stock_name_cache[code]
         name = None
         try:
-            if _get_stock_info_safe:
-                info = _get_stock_info_safe(code)
-                if isinstance(info, dict):
-                    name = info.get("name")
+            name = _resolve_stock_name_by_market(code)
         except Exception as e:
             logger.warning(f"⚠️ 获取股票名称失败: {code} - {e}")
         if not name:
@@ -759,7 +855,7 @@ class SimpleAnalysisService:
             for t in tasks:
                 code = t.get("stock_code") or t.get("stock_symbol")
                 name = t.get("stock_name")
-                if not name and code:
+                if code and _should_refresh_task_stock_name(code, name):
                     t["stock_name"] = self._resolve_stock_name(code)
         except Exception as e:
             logger.warning(f"⚠️ 补齐股票名称时出现异常: {e}")
