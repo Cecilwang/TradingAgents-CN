@@ -54,8 +54,17 @@ class FavoritesService:
             "volume": None,
         }
 
-    async def get_user_favorites(self, user_id: str) -> List[Dict[str, Any]]:
-        """获取用户自选股列表，并批量拉取实时行情进行富集（兼容字符串ID与ObjectId）。"""
+    async def get_user_favorites(
+        self,
+        user_id: str,
+        allow_online_quote_fallback: bool = False
+    ) -> List[Dict[str, Any]]:
+        """获取用户自选股列表。
+
+        默认只使用数据库中的 `market_quotes` 行情缓存，避免页面加载时触发
+        在线全市场快照抓取而阻塞用户操作。需要在线补齐时显式传入
+        `allow_online_quote_fallback=True`。
+        """
         db = await self._get_db()
 
         favorites: List[Dict[str, Any]] = []
@@ -132,9 +141,9 @@ class FavoritesService:
                     if q:
                         it["current_price"] = q.get("close")
                         it["change_percent"] = q.get("pct_chg")
-                # 兜底：对未命中的代码使用在线源补齐（可选）
+                # 兜底：按需对未命中的代码使用在线源补齐（显式开启时才执行）
                 missing = [c for c in codes if c not in quotes_map]
-                if missing:
+                if missing and allow_online_quote_fallback:
                     try:
                         quotes_online = await get_quotes_service().get_quotes(missing)
                         for it in items:
