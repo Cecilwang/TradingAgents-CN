@@ -66,6 +66,23 @@
                 <template v-else>
                   <div class="favorites-filter-row">
                     <el-select
+                      v-model="favoriteMarketFilters"
+                      multiple
+                      clearable
+                      collapse-tags
+                      collapse-tags-tooltip
+                      placeholder="按市场筛选"
+                      class="market-filter-select"
+                    >
+                      <el-option
+                        v-for="market in favoriteMarketOptions"
+                        :key="market"
+                        :label="market"
+                        :value="market"
+                      />
+                    </el-select>
+
+                    <el-select
                       v-model="favoriteTagFilters"
                       multiple
                       clearable
@@ -111,7 +128,9 @@
                       text
                       @click="resetFavoritePicker"
                       :disabled="
-                        selectedFavoriteCodes.length === 0 && favoriteTagFilters.length === 0
+                        selectedFavoriteCodes.length === 0 &&
+                        favoriteTagFilters.length === 0 &&
+                        favoriteMarketFilters.length === 0
                       "
                     >
                       重置
@@ -122,6 +141,9 @@
                     <span>已勾选 {{ selectedFavoriteCodes.length }} 只</span>
                     <span v-if="favoriteTagFilters.length > 0">
                       当前标签：{{ favoriteTagFilters.join('、') }}
+                    </span>
+                    <span v-if="favoriteMarketFilters.length > 0">
+                      当前市场：{{ favoriteMarketFilters.join('、') }}
                     </span>
                   </div>
 
@@ -427,7 +449,7 @@ import { tagsApi, type TagItem } from '@/api/tags'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import ModelConfig from '@/components/ModelConfig.vue'
-import { getMarketByStockCode } from '@/utils/market'
+import { getMarketByStockCode, normalizeMarketForAnalysis } from '@/utils/market'
 import { buildFullSymbol } from '@/utils/stock'
 import { validateStockCode } from '@/utils/stockValidator'
 
@@ -453,7 +475,20 @@ const favoritesLoadError = ref('')
 const favoriteOptions = ref<FavoriteQuickOption[]>([])
 const favoriteTags = ref<TagItem[]>([])
 const favoriteTagFilters = ref<string[]>([])
+const favoriteMarketFilters = ref<string[]>([])
 const selectedFavoriteCodes = ref<string[]>([])
+const favoriteMarketOptions = computed<string[]>(() => {
+  const preferredOrder = ['A股', '港股', '美股']
+  const markets = Array.from(new Set(favoriteOptions.value.map(item => item.market)))
+  return markets.sort((a, b) => {
+    const indexA = preferredOrder.indexOf(a)
+    const indexB = preferredOrder.indexOf(b)
+    if (indexA === -1 && indexB === -1) return a.localeCompare(b, 'zh-CN')
+    if (indexA === -1) return 1
+    if (indexB === -1) return -1
+    return indexA - indexB
+  })
+})
 const favoriteTagColorMap = computed<Record<string, string>>(() => {
   return favoriteTags.value.reduce(
     (acc, tag) => {
@@ -464,13 +499,16 @@ const favoriteTagColorMap = computed<Record<string, string>>(() => {
   )
 })
 const filteredFavoriteOptions = computed<FavoriteQuickOption[]>(() => {
-  if (favoriteTagFilters.value.length === 0) {
-    return favoriteOptions.value
-  }
+  return favoriteOptions.value.filter(item => {
+    const matchesMarket =
+      favoriteMarketFilters.value.length === 0 ||
+      favoriteMarketFilters.value.includes(item.market)
+    const matchesTag =
+      favoriteTagFilters.value.length === 0 ||
+      favoriteTagFilters.value.some(tag => item.tags.includes(tag))
 
-  return favoriteOptions.value.filter(item =>
-    favoriteTagFilters.value.some(tag => item.tags.includes(tag))
-  )
+    return matchesMarket && matchesTag
+  })
 })
 
 // 模型设置
@@ -599,7 +637,7 @@ const mapFavoriteToQuickOption = (item: FavoriteItem): FavoriteQuickOption | nul
   return {
     code: symbol,
     stock_name: item.stock_name || symbol,
-    market: item.market || getMarketByStockCode(symbol),
+    market: normalizeMarketForAnalysis(item.market || getMarketByStockCode(symbol)),
     tags: Array.isArray(item.tags) ? item.tags.filter(Boolean) : []
   }
 }
@@ -662,6 +700,7 @@ const toggleFavoriteSelection = (code: string) => {
 }
 
 const resetFavoritePicker = () => {
+  favoriteMarketFilters.value = []
   favoriteTagFilters.value = []
   selectedFavoriteCodes.value = []
 }
@@ -1077,6 +1116,7 @@ const submitBatchAnalysis = async () => {
           align-items: center;
           margin-bottom: 12px;
 
+          .market-filter-select,
           .tag-filter-select {
             width: 320px;
             max-width: 100%;
