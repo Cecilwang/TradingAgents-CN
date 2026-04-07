@@ -87,7 +87,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-qianfan = ["qianfan>=0.4.20"]
+qianfan = ["qianfan>=0.4.12.3"]
 
 [project.scripts]
 tradingagents = "main:main"
