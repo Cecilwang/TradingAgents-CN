@@ -8,22 +8,17 @@
             <el-icon class="title-icon"><Files /></el-icon>
             批量分析
           </h1>
-          <p class="page-description">
-            AI驱动的批量股票分析，高效处理多只股票
-          </p>
+          <p class="page-description">AI驱动的批量股票分析，高效处理多只股票</p>
         </div>
       </div>
 
       <!-- 风险提示 -->
       <div class="risk-disclaimer">
-        <el-alert
-          type="warning"
-          :closable="false"
-          show-icon
-        >
+        <el-alert type="warning" :closable="false" show-icon>
           <template #title>
-            <span style="font-size: 14px;">
-              <strong>⚠️ 重要提示：</strong>本工具为股票分析辅助工具，所有分析结果仅供参考，不构成投资建议。投资有风险，决策需谨慎。
+            <span style="font-size: 14px">
+              <strong>⚠️ 重要提示：</strong
+              >本工具为股票分析辅助工具，所有分析结果仅供参考，不构成投资建议。投资有风险，决策需谨慎。
             </span>
           </template>
         </el-alert>
@@ -45,6 +40,131 @@
             </template>
 
             <div class="stock-input-section">
+              <div class="favorites-import-section" v-loading="favoritesLoading">
+                <div class="favorites-import-header">
+                  <div>
+                    <h4>从自选股快速添加</h4>
+                    <p>按标签筛选后，将自选股快速加入本次批量分析列表。</p>
+                  </div>
+                  <el-tag type="info" size="small">
+                    {{ filteredFavoriteOptions.length }}/{{ favoriteOptions.length }} 只可选
+                  </el-tag>
+                </div>
+
+                <el-alert
+                  v-if="favoritesLoadError"
+                  type="warning"
+                  :closable="false"
+                  :title="favoritesLoadError"
+                  show-icon
+                />
+
+                <div v-else-if="favoriteOptions.length === 0" class="favorites-import-empty">
+                  <el-empty description="暂无自选股可导入" :image-size="50" />
+                </div>
+
+                <template v-else>
+                  <div class="favorites-filter-row">
+                    <el-select
+                      v-model="favoriteTagFilters"
+                      multiple
+                      clearable
+                      filterable
+                      collapse-tags
+                      collapse-tags-tooltip
+                      placeholder="按标签筛选自选股"
+                      class="tag-filter-select"
+                    >
+                      <el-option
+                        v-for="tag in favoriteTags"
+                        :key="tag.name"
+                        :label="tag.name"
+                        :value="tag.name"
+                      >
+                        <div class="tag-option">
+                          <span>{{ tag.name }}</span>
+                          <span
+                            class="tag-color-dot"
+                            :style="{ background: getFavoriteTagColor(tag.name) || '#d1d5db' }"
+                          />
+                        </div>
+                      </el-option>
+                    </el-select>
+
+                    <el-button
+                      @click="addFilteredFavorites"
+                      :disabled="filteredFavoriteOptions.length === 0"
+                    >
+                      加入当前筛选
+                    </el-button>
+
+                    <el-button
+                      type="primary"
+                      plain
+                      @click="addSelectedFavorites"
+                      :disabled="selectedFavoriteCodes.length === 0"
+                    >
+                      加入已勾选
+                    </el-button>
+
+                    <el-button
+                      text
+                      @click="resetFavoritePicker"
+                      :disabled="
+                        selectedFavoriteCodes.length === 0 && favoriteTagFilters.length === 0
+                      "
+                    >
+                      重置
+                    </el-button>
+                  </div>
+
+                  <div class="favorite-selection-summary">
+                    <span>已勾选 {{ selectedFavoriteCodes.length }} 只</span>
+                    <span v-if="favoriteTagFilters.length > 0">
+                      当前标签：{{ favoriteTagFilters.join('、') }}
+                    </span>
+                  </div>
+
+                  <div class="favorite-option-list">
+                    <button
+                      v-for="item in filteredFavoriteOptions"
+                      :key="item.code"
+                      type="button"
+                      class="favorite-option"
+                      :class="{
+                        selected: selectedFavoriteCodes.includes(item.code),
+                        alreadyAdded: stockCodes.includes(item.code)
+                      }"
+                      @click="toggleFavoriteSelection(item.code)"
+                    >
+                      <div class="favorite-option-main">
+                        <span class="favorite-option-name">{{ item.stock_name }}</span>
+                        <span class="favorite-option-code">{{ item.code }}</span>
+                      </div>
+
+                      <div class="favorite-option-meta">
+                        <el-tag size="small" effect="plain">{{ item.market }}</el-tag>
+                        <el-tag
+                          v-for="tag in item.tags.slice(0, 3)"
+                          :key="tag"
+                          size="small"
+                          effect="plain"
+                          :color="getFavoriteTagColor(tag)"
+                        >
+                          {{ tag }}
+                        </el-tag>
+                        <el-tag v-if="item.tags.length > 3" size="small" type="info">
+                          +{{ item.tags.length - 3 }}
+                        </el-tag>
+                        <el-tag v-if="stockCodes.includes(item.code)" size="small" type="success">
+                          已加入
+                        </el-tag>
+                      </div>
+                    </button>
+                  </div>
+                </template>
+              </div>
+
               <div class="input-area">
                 <el-input
                   v-model="stockInput"
@@ -101,7 +221,7 @@
       </el-row>
 
       <!-- 分析配置区域 -->
-      <el-row :gutter="24" style="margin-top: 24px;">
+      <el-row :gutter="24" style="margin-top: 24px">
         <!-- 左侧：分析配置 -->
         <el-col :span="18">
           <el-card class="config-card" shadow="hover">
@@ -117,11 +237,7 @@
               <div class="form-section">
                 <h4 class="section-title">📋 基础信息</h4>
                 <el-form-item label="批次标题" required>
-                  <el-input
-                    v-model="batchForm.title"
-                    placeholder="如：银行板块分析"
-                    size="large"
-                  />
+                  <el-input v-model="batchForm.title" placeholder="如：银行板块分析" size="large" />
                 </el-form-item>
 
                 <el-form-item label="批次描述">
@@ -138,7 +254,12 @@
               <div class="form-section">
                 <h4 class="section-title">⚙️ 分析参数</h4>
                 <el-form-item label="分析深度">
-                  <el-select v-model="batchForm.depth" placeholder="选择深度" size="large" style="width: 100%">
+                  <el-select
+                    v-model="batchForm.depth"
+                    placeholder="选择深度"
+                    size="large"
+                    style="width: 100%"
+                  >
                     <el-option label="⚡ 1级 - 快速分析 (2-4分钟/只)" value="1" />
                     <el-option label="📈 2级 - 基础分析 (4-6分钟/只)" value="2" />
                     <el-option label="🎯 3级 - 标准分析 (6-10分钟/只，推荐)" value="3" />
@@ -153,11 +274,7 @@
                 <h4 class="section-title">👥 分析师团队</h4>
                 <div class="analysts-selection">
                   <el-checkbox-group v-model="batchForm.analysts" class="analysts-group">
-                    <div
-                      v-for="analyst in ANALYSTS"
-                      :key="analyst.id"
-                      class="analyst-option"
-                    >
+                    <div v-for="analyst in ANALYSTS" :key="analyst.id" class="analyst-option">
                       <el-checkbox :label="analyst.name" class="analyst-checkbox">
                         <div class="analyst-info">
                           <span class="analyst-name">{{ analyst.name }}</span>
@@ -171,7 +288,16 @@
 
               <!-- 操作按钮 -->
               <div class="form-section">
-                <div class="action-buttons" style="display: flex; justify-content: center; align-items: center; width: 100%; text-align: center;">
+                <div
+                  class="action-buttons"
+                  style="
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    width: 100%;
+                    text-align: center;
+                  "
+                >
                   <el-button
                     type="primary"
                     size="large"
@@ -179,7 +305,13 @@
                     :loading="submitting"
                     :disabled="stockCodes.length === 0"
                     class="submit-btn large-batch-btn"
-                    style="width: 320px; height: 56px; font-size: 18px; font-weight: 700; border-radius: 16px;"
+                    style="
+                      width: 320px;
+                      height: 56px;
+                      font-size: 18px;
+                      font-weight: 700;
+                      border-radius: 16px;
+                    "
                   >
                     <el-icon><TrendCharts /></el-icon>
                     开始批量分析 ({{ stockCodes.length }}只)
@@ -265,12 +397,7 @@
           :class="{ invalid: invalidCodes.includes(code) }"
         >
           <span class="stock-code">{{ code }}</span>
-          <el-button
-            type="text"
-            size="small"
-            @click="removeStock(index)"
-            class="remove-btn"
-          >
+          <el-button type="text" size="small" @click="removeStock(index)" class="remove-btn">
             <el-icon><Close /></el-icon>
           </el-button>
         </div>
@@ -290,11 +417,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Files, TrendCharts, Check, Close } from '@element-plus/icons-vue'
 import { ANALYSTS, DEFAULT_ANALYSTS, convertAnalystNamesToIds } from '@/constants/analysts'
 import { configApi } from '@/api/config'
+import { favoritesApi, type FavoriteItem } from '@/api/favorites'
+import { tagsApi, type TagItem } from '@/api/tags'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import ModelConfig from '@/components/ModelConfig.vue'
@@ -307,9 +436,41 @@ const route = useRoute()
 
 const submitting = ref(false)
 const stockInput = ref('')
-const stockCodes = ref<string[]>([])  // 保留用于表单绑定
-const symbols = ref<string[]>([])     // 标准化后的代码列表
+const stockCodes = ref<string[]>([]) // 保留用于表单绑定
+const symbols = ref<string[]>([]) // 标准化后的代码列表
 const invalidCodes = ref<string[]>([])
+
+interface FavoriteQuickOption {
+  code: string
+  stock_name: string
+  market: string
+  tags: string[]
+}
+
+const favoritesLoading = ref(false)
+const favoritesLoadError = ref('')
+const favoriteOptions = ref<FavoriteQuickOption[]>([])
+const favoriteTags = ref<TagItem[]>([])
+const favoriteTagFilters = ref<string[]>([])
+const selectedFavoriteCodes = ref<string[]>([])
+const favoriteTagColorMap = computed<Record<string, string>>(() => {
+  return favoriteTags.value.reduce(
+    (acc, tag) => {
+      acc[tag.name] = tag.color
+      return acc
+    },
+    {} as Record<string, string>
+  )
+})
+const filteredFavoriteOptions = computed<FavoriteQuickOption[]>(() => {
+  if (favoriteTagFilters.value.length === 0) {
+    return favoriteOptions.value
+  }
+
+  return favoriteOptions.value.filter(item =>
+    favoriteTagFilters.value.some(tag => item.tags.includes(tag))
+  )
+})
 
 // 模型设置
 const modelSettings = ref({
@@ -323,8 +484,8 @@ const availableModels = ref<any[]>([])
 const batchForm = reactive({
   title: '',
   description: '',
-  depth: '3',  // 默认3级标准分析，将在 onMounted 中从用户偏好加载
-  analysts: [...DEFAULT_ANALYSTS],  // 将在 onMounted 中从用户偏好加载
+  depth: '3', // 默认3级标准分析，将在 onMounted 中从用户偏好加载
+  analysts: [...DEFAULT_ANALYSTS], // 将在 onMounted 中从用户偏好加载
   includeSentiment: true,
   includeRisk: true,
   language: 'zh-CN'
@@ -352,7 +513,7 @@ const parseStockCodes = () => {
   const normalized: string[] = []
   const invalid: string[] = []
   for (const c of codes) {
-    const { symbol, error } = normalizeCodeSmart(c)
+    const { symbol } = normalizeCodeSmart(c)
     if (symbol) normalized.push(symbol)
     else invalid.push(c)
   }
@@ -360,6 +521,158 @@ const parseStockCodes = () => {
   stockCodes.value = normalized
   symbols.value = [...normalized]
   invalidCodes.value = invalid
+}
+
+const setStockInputFromCodes = (codes: string[]) => {
+  stockInput.value = codes.join('\n')
+  parseStockCodes()
+}
+
+const mergeCodesIntoBatch = (codes: string[]) => {
+  const normalizedCodes: string[] = []
+  const invalidFavoriteCodes: string[] = []
+
+  for (const code of codes) {
+    const { symbol } = normalizeCodeSmart(code)
+    if (symbol && !normalizedCodes.includes(symbol)) {
+      normalizedCodes.push(symbol)
+    } else if (!symbol) {
+      invalidFavoriteCodes.push(code)
+    }
+  }
+
+  const mergedCodes = [...stockCodes.value]
+  let addedCount = 0
+
+  for (const code of normalizedCodes) {
+    if (!mergedCodes.includes(code)) {
+      mergedCodes.push(code)
+      addedCount += 1
+    }
+  }
+
+  setStockInputFromCodes(mergedCodes)
+
+  return {
+    addedCount,
+    skippedCount: normalizedCodes.length - addedCount,
+    invalidFavoriteCodes
+  }
+}
+
+const getFavoriteTagColor = (name: string) => favoriteTagColorMap.value[name] || ''
+
+const mapFavoriteToQuickOption = (item: FavoriteItem): FavoriteQuickOption | null => {
+  const rawCode = String(item.symbol || item.stock_code || '').trim()
+  const { symbol } = normalizeCodeSmart(rawCode)
+
+  if (!symbol) {
+    return null
+  }
+
+  return {
+    code: symbol,
+    stock_name: item.stock_name || symbol,
+    market: item.market || getMarketByStockCode(symbol),
+    tags: Array.isArray(item.tags) ? item.tags.filter(Boolean) : []
+  }
+}
+
+const loadFavoriteQuickPickData = async () => {
+  favoritesLoading.value = true
+  favoritesLoadError.value = ''
+
+  try {
+    const favoritesResponse = await favoritesApi.list()
+    const favoriteItems = (((favoritesResponse as any)?.data || []) as FavoriteItem[])
+      .map(mapFavoriteToQuickOption)
+      .filter((item): item is FavoriteQuickOption => item !== null)
+
+    const favoriteMap = new Map<string, FavoriteQuickOption>()
+    for (const item of favoriteItems) {
+      if (!favoriteMap.has(item.code)) {
+        favoriteMap.set(item.code, item)
+      }
+    }
+    favoriteOptions.value = Array.from(favoriteMap.values())
+
+    try {
+      const tagsResponse = await tagsApi.list()
+      favoriteTags.value = ((tagsResponse as any)?.data || []) as TagItem[]
+    } catch (error) {
+      console.error('加载自选股标签失败:', error)
+      favoriteTags.value = []
+    }
+
+    if (favoriteTags.value.length === 0) {
+      favoriteTags.value = Array.from(
+        new Set(favoriteOptions.value.flatMap(item => item.tags))
+      ).map(name => ({
+        id: name,
+        name,
+        color: '',
+        sort_order: 0,
+        created_at: '',
+        updated_at: ''
+      }))
+    }
+  } catch (error: any) {
+    console.error('加载自选股快速导入数据失败:', error)
+    favoritesLoadError.value = error.message || '加载自选股失败，无法使用快速导入'
+    favoriteOptions.value = []
+    favoriteTags.value = []
+  } finally {
+    favoritesLoading.value = false
+  }
+}
+
+const toggleFavoriteSelection = (code: string) => {
+  const index = selectedFavoriteCodes.value.indexOf(code)
+  if (index >= 0) {
+    selectedFavoriteCodes.value.splice(index, 1)
+  } else {
+    selectedFavoriteCodes.value.push(code)
+  }
+}
+
+const resetFavoritePicker = () => {
+  favoriteTagFilters.value = []
+  selectedFavoriteCodes.value = []
+}
+
+const addFavoriteCodesToBatch = (codes: string[], successPrefix: string) => {
+  const { addedCount, skippedCount, invalidFavoriteCodes } = mergeCodesIntoBatch(codes)
+
+  if (addedCount > 0) {
+    const skippedText = skippedCount > 0 ? `，${skippedCount} 只已存在` : ''
+    ElMessage.success(`${successPrefix} ${addedCount} 只股票${skippedText}`)
+  } else if (skippedCount > 0) {
+    ElMessage.info('这些股票已全部在待分析列表中')
+  }
+
+  if (invalidFavoriteCodes.length > 0) {
+    ElMessage.warning(`有 ${invalidFavoriteCodes.length} 只自选股代码无法识别，已跳过`)
+  }
+}
+
+const addFilteredFavorites = () => {
+  const codes = filteredFavoriteOptions.value.map(item => item.code)
+  if (codes.length === 0) {
+    ElMessage.warning('当前筛选结果为空')
+    return
+  }
+
+  addFavoriteCodesToBatch(codes, '已从当前筛选结果加入')
+}
+
+const addSelectedFavorites = () => {
+  if (selectedFavoriteCodes.value.length === 0) {
+    ElMessage.warning('请先勾选要加入的自选股')
+    return
+  }
+
+  addFavoriteCodesToBatch(selectedFavoriteCodes.value, '已加入')
+  selectedFavoriteCodes.value = []
 }
 
 const clearStocks = () => {
@@ -396,7 +709,7 @@ const initializeModelSettings = async () => {
 
 // 页面初始化
 onMounted(async () => {
-  await initializeModelSettings()
+  await Promise.all([initializeModelSettings(), loadFavoriteQuickPickData()])
 
   // 🆕 从用户偏好加载默认设置
   const authStore = useAuthStore()
@@ -422,7 +735,10 @@ onMounted(async () => {
   // 读取路由查询参数以便从筛选页预填充（路由参数优先级最高）
   const q = route.query as any
   if (q?.stocks) {
-    const parts = String(q.stocks).split(',').map((s) => s.trim()).filter(Boolean)
+    const parts = String(q.stocks)
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
     stockCodes.value = parts
     stockInput.value = parts.join('\n')
     // 触发解析以更新 symbols
@@ -433,10 +749,10 @@ onMounted(async () => {
 const removeStock = (index: number) => {
   const removedCode = stockCodes.value[index]
   stockCodes.value.splice(index, 1)
-  
+
   // 更新输入框
   stockInput.value = stockCodes.value.join('\n')
-  
+
   // 从无效列表中移除
   const invalidIndex = invalidCodes.value.indexOf(removedCode)
   if (invalidIndex > -1) {
@@ -498,7 +814,7 @@ const submitBatchAnalysis = async () => {
       title: batchForm.title,
       description: batchForm.description,
       symbols: symbols.value,
-      stock_codes: symbols.value,  // 兼容字段
+      stock_codes: symbols.value, // 兼容字段
       parameters: {
         // 若全部代码可识别为同一市场则携带；否则省略让后端自行判断
         market_type: (() => {
@@ -536,16 +852,17 @@ const submitBatchAnalysis = async () => {
         distinguishCancelAndClose: true,
         closeOnClickModal: false
       }
-    ).then(() => {
-      // 用户点击"前往任务中心"
-      router.push({ path: '/tasks', query: { batch_id } })
-    }).catch((action) => {
-      // 用户点击"留在当前页面"或关闭对话框
-      if (action === 'cancel') {
-        ElMessage.info('任务正在后台执行，您可以随时前往任务中心查看进度')
-      }
-    })
-
+    )
+      .then(() => {
+        // 用户点击"前往任务中心"
+        router.push({ path: '/tasks', query: { batch_id } })
+      })
+      .catch(action => {
+        // 用户点击"留在当前页面"或关闭对话框
+        if (action === 'cancel') {
+          ElMessage.info('任务正在后台执行，您可以随时前往任务中心查看进度')
+        }
+      })
   } catch (error: any) {
     // 处理错误
     if (error !== 'cancel') {
@@ -555,21 +872,6 @@ const submitBatchAnalysis = async () => {
     submitting.value = false
   }
 }
-
-const resetForm = () => {
-  // 从用户偏好加载默认值
-  const authStore = useAuthStore()
-  const userPrefs = authStore.user?.preferences
-
-  Object.assign(batchForm, {
-    title: '',
-    description: '',
-    depth: userPrefs?.default_depth || '3',
-    analysts: userPrefs?.default_analysts ? [...userPrefs.default_analysts] : [...DEFAULT_ANALYSTS]
-  })
-  clearStocks()
-}
-
 </script>
 
 <style lang="scss" scoped>
@@ -612,7 +914,8 @@ const resetForm = () => {
   }
 
   .analysis-container {
-    .stock-list-card, .config-card {
+    .stock-list-card,
+    .config-card {
       border-radius: 16px;
       border: none;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
@@ -713,6 +1016,133 @@ const resetForm = () => {
     }
 
     .stock-input-section {
+      .favorites-import-section {
+        margin-bottom: 24px;
+        padding: 20px;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+
+        .favorites-import-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 16px;
+          margin-bottom: 16px;
+
+          h4 {
+            margin: 0 0 6px 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a202c;
+          }
+
+          p {
+            margin: 0;
+            font-size: 13px;
+            color: #64748b;
+          }
+        }
+
+        .favorites-filter-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          align-items: center;
+          margin-bottom: 12px;
+
+          .tag-filter-select {
+            width: 320px;
+            max-width: 100%;
+          }
+
+          .tag-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+
+            .tag-color-dot {
+              width: 10px;
+              height: 10px;
+              border-radius: 50%;
+              flex-shrink: 0;
+            }
+          }
+        }
+
+        .favorite-selection-summary {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin-bottom: 12px;
+          font-size: 13px;
+          color: #64748b;
+        }
+
+        .favorite-option-list {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+          gap: 12px;
+          max-height: 280px;
+          overflow-y: auto;
+          padding-right: 4px;
+        }
+
+        .favorite-option {
+          border: 1px solid #dbeafe;
+          background: #fff;
+          border-radius: 12px;
+          padding: 12px;
+          text-align: left;
+          cursor: pointer;
+          transition: all 0.2s ease;
+
+          &:hover {
+            border-color: #93c5fd;
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.08);
+            transform: translateY(-1px);
+          }
+
+          &.selected {
+            border-color: #3b82f6;
+            background: #eff6ff;
+            box-shadow: 0 10px 24px rgba(59, 130, 246, 0.12);
+          }
+
+          &.alreadyAdded {
+            border-style: dashed;
+          }
+
+          .favorite-option-main {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 10px;
+          }
+
+          .favorite-option-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1f2937;
+          }
+
+          .favorite-option-code {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            color: #2563eb;
+            white-space: nowrap;
+          }
+
+          .favorite-option-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+          }
+        }
+      }
+
       .input-area {
         margin-bottom: 24px;
 
