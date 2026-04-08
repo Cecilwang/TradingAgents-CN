@@ -11,8 +11,8 @@ __description__ = "Multi-agent stock analysis system for Chinese markets"
 
 # 导入核心模块
 try:
-    from .config import config_manager
-    from .utils import logging_manager
+    from .config import config_manager  # noqa: F401
+    from .utils import logging_manager  # noqa: F401
 except ImportError:
     # 如果导入失败，不影响模块的基本功能
     pass

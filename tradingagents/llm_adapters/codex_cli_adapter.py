@@ -1013,7 +1013,8 @@ class ChatCodexCLI(BaseChatModel):
                     schema_path,
                 ]
             )
-        command.extend(["--color", "never", "-o", output_path, "-"])
+            command.extend(["--color", "never"])
+        command.extend(["-o", output_path, "-"])
         return command
 
     def _run_codex_exec(

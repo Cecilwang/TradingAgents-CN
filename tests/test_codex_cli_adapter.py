@@ -1,7 +1,10 @@
+import os
 import asyncio
 import json
 import subprocess
 from pathlib import Path
+
+os.environ.setdefault("USE_MONGODB_STORAGE", "false")
 
 import pytest
 from langchain_core.language_models.chat_models import generate_from_stream
@@ -87,6 +90,8 @@ def test_build_codex_command_resume_omits_schema_and_sandbox():
     assert "--json" in command
     assert "--output-schema" not in command
     assert "-s" not in command
+    assert "--color" not in command
+    assert "-o" in command
 
 
 def test_parse_codex_response_with_tool_calls():
