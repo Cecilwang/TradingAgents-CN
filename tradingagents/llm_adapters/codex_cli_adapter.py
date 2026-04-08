@@ -96,6 +96,12 @@ def infer_codex_exec_model_name(model_name: str) -> str:
     return normalized
 
 
+def get_codex_cli_profile_name() -> Optional[str]:
+    """读取可选的 Codex profile；未设置时不加载 profile。"""
+    profile_name = os.getenv("TA_CODEX_PROFILE", "").strip()
+    return profile_name or None
+
+
 class ChatCodexCLI(BaseChatModel):
     """基于本地 Codex CLI 的 LangChain ChatModel 适配器。"""
 
@@ -126,6 +132,7 @@ class ChatCodexCLI(BaseChatModel):
             "working_dir": self.working_dir,
             "reasoning_effort": self.reasoning_effort,
             "fast_mode": self.fast_mode,
+            "profile_name": get_codex_cli_profile_name(),
             "ask_for_approval": self.ask_for_approval,
             "sandbox_mode": self.sandbox_mode,
         }
@@ -977,14 +984,17 @@ class ChatCodexCLI(BaseChatModel):
         ]
         if self.working_dir:
             command.extend(["-C", self.working_dir])
+        profile_name = get_codex_cli_profile_name()
+        if profile_name:
+            command.extend(["-p", profile_name])
         command.extend(
             [
                 "-c",
                 f"model_reasoning_effort={json.dumps(self.reasoning_effort)}",
-                "-c",
-                "service_tier=fast" if self.fast_mode else "service_tier=flex",
             ]
         )
+        if self.fast_mode:
+            command.extend(["-c", "service_tier=fast"])
         command.append("exec")
         if resume_session_id:
             command.extend(["resume", resume_session_id])
