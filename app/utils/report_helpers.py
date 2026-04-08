@@ -98,9 +98,9 @@ def extract_report_summary_markdown(report: Dict[str, Any]) -> str:
         return ""
 
     reports = report.get("reports") or {}
-    final_decision = reports.get("final_trade_decision") if isinstance(reports, dict) else None
-    if isinstance(final_decision, str) and final_decision.strip():
-        cleaned = final_decision.strip()
+    investment_plan = reports.get("investment_plan") if isinstance(reports, dict) else None
+    if isinstance(investment_plan, str) and investment_plan.strip():
+        cleaned = investment_plan.strip()
         cleaned = re.sub(r"^\s*#\s+.*?\n+", "", cleaned, count=1)
         return cleaned.strip()
 
