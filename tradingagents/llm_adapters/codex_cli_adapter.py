@@ -628,8 +628,10 @@ class ChatCodexCLI(BaseChatModel):
         )
 
         logger.info(
-            "🧩 [Codex CLI] 规整请求: model=%s, tools=%s, tool_choice=%s, parallel_tool_calls=%s, messages=%s",
+            "🧩 [Codex CLI] 规整请求: model=%s, ta_session_id=%s, resume_session_id=%s, tools=%s, tool_choice=%s, parallel_tool_calls=%s, messages=%s",
             self.model_name,
+            session_id or "-",
+            resume_session_id or "-",
             len(tools),
             tool_choice,
             parallel_tool_calls,
@@ -1070,10 +1072,11 @@ class ChatCodexCLI(BaseChatModel):
         )
 
         logger.info(
-            "🚀 [Codex CLI] 开始调用: command=%s, model=%s, working_dir=%s",
+            "🚀 [Codex CLI] 开始调用: command=%s, model=%s, working_dir=%s, resume_session_id=%s",
             self.codex_command,
             self.model_name,
             self.working_dir,
+            resume_session_id or "-",
         )
 
         try:
@@ -1130,10 +1133,11 @@ class ChatCodexCLI(BaseChatModel):
         )
 
         logger.info(
-            "🚀 [Codex CLI] 开始异步调用: command=%s, model=%s, working_dir=%s",
+            "🚀 [Codex CLI] 开始异步调用: command=%s, model=%s, working_dir=%s, resume_session_id=%s",
             self.codex_command,
             self.model_name,
             self.working_dir,
+            resume_session_id or "-",
         )
 
         try:
@@ -1195,10 +1199,11 @@ class ChatCodexCLI(BaseChatModel):
         stdout_lines: List[str] = []
 
         logger.info(
-            "🚀 [Codex CLI] 开始流式调用: command=%s, model=%s, working_dir=%s",
+            "🚀 [Codex CLI] 开始流式调用: command=%s, model=%s, working_dir=%s, resume_session_id=%s",
             self.codex_command,
             self.model_name,
             self.working_dir,
+            resume_session_id or "-",
         )
 
         process: Optional[subprocess.Popen[str]] = None
@@ -1272,10 +1277,11 @@ class ChatCodexCLI(BaseChatModel):
         stdout_lines: List[str] = []
 
         logger.info(
-            "🚀 [Codex CLI] 开始异步流式调用: command=%s, model=%s, working_dir=%s",
+            "🚀 [Codex CLI] 开始异步流式调用: command=%s, model=%s, working_dir=%s, resume_session_id=%s",
             self.codex_command,
             self.model_name,
             self.working_dir,
+            resume_session_id or "-",
         )
 
         process: Optional[asyncio.subprocess.Process] = None
