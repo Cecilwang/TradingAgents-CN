@@ -50,6 +50,20 @@ except ImportError:
     TOKEN_TRACKING_ENABLED = False
 
 
+_CODEX_CLI_PRICING_BY_MODEL: Dict[str, Dict[str, Any]] = {
+    "codex-gpt-5.4-mini": {
+        "input_price_per_1k": 0.00075,
+        "output_price_per_1k": 0.0045,
+        "currency": "USD",
+    },
+    "codex-gpt-5.4": {
+        "input_price_per_1k": 0.0025,
+        "output_price_per_1k": 0.015,
+        "currency": "USD",
+    },
+}
+
+
 def _default_working_dir() -> str:
     """返回项目根目录，供 Codex CLI 作为只读工作目录使用。"""
     return str(Path(__file__).resolve().parents[2])
@@ -100,6 +114,18 @@ def get_codex_cli_profile_name() -> Optional[str]:
     """读取可选的 Codex profile；未设置时不加载 profile。"""
     profile_name = os.getenv("TA_CODEX_PROFILE", "").strip()
     return profile_name or None
+
+
+def get_codex_cli_pricing(model_name: str) -> Optional[Dict[str, Any]]:
+    """返回 Codex 模型的默认定价元信息。"""
+    normalized = str(model_name or "").strip()
+    if not normalized:
+        return None
+    if normalized.startswith("codex-gpt-5.4-mini") or normalized == "gpt-5.4-mini":
+        return dict(_CODEX_CLI_PRICING_BY_MODEL["codex-gpt-5.4-mini"])
+    if normalized.startswith("codex-gpt-5.4") or normalized == "gpt-5.4":
+        return dict(_CODEX_CLI_PRICING_BY_MODEL["codex-gpt-5.4"])
+    return None
 
 
 class ChatCodexCLI(BaseChatModel):

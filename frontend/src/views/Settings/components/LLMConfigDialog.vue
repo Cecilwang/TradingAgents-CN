@@ -336,40 +336,40 @@
             :max="10"
           />
         </el-form-item>
-
-        <!-- 定价配置 -->
-        <el-divider content-position="left">定价配置</el-divider>
-
-        <el-form-item label="输入价格" prop="input_price_per_1k">
-          <el-input-number
-            v-model="formData.input_price_per_1k"
-            :min="0"
-            :step="0.0001"
-            :controls="false"
-            placeholder="每1000个token的价格"
-          />
-          <span class="ml-2 text-gray-500">{{ formData.currency || 'CNY' }}/1K tokens</span>
-        </el-form-item>
-
-        <el-form-item label="输出价格" prop="output_price_per_1k">
-          <el-input-number
-            v-model="formData.output_price_per_1k"
-            :min="0"
-            :step="0.0001"
-            :controls="false"
-            placeholder="每1000个token的价格"
-          />
-          <span class="ml-2 text-gray-500">{{ formData.currency || 'CNY' }}/1K tokens</span>
-        </el-form-item>
-
-        <el-form-item label="货币单位" prop="currency">
-          <el-select v-model="formData.currency" placeholder="选择货币单位">
-            <el-option label="人民币 (CNY)" value="CNY" />
-            <el-option label="美元 (USD)" value="USD" />
-            <el-option label="欧元 (EUR)" value="EUR" />
-          </el-select>
-        </el-form-item>
       </template>
+
+      <!-- 定价配置 -->
+      <el-divider content-position="left">定价配置</el-divider>
+
+      <el-form-item label="输入价格" prop="input_price_per_1k">
+        <el-input-number
+          v-model="formData.input_price_per_1k"
+          :min="0"
+          :step="0.0001"
+          :controls="false"
+          placeholder="每1000个token的价格"
+        />
+        <span class="ml-2 text-gray-500">{{ formData.currency || 'CNY' }}/1K tokens</span>
+      </el-form-item>
+
+      <el-form-item label="输出价格" prop="output_price_per_1k">
+        <el-input-number
+          v-model="formData.output_price_per_1k"
+          :min="0"
+          :step="0.0001"
+          :controls="false"
+          placeholder="每1000个token的价格"
+        />
+        <span class="ml-2 text-gray-500">{{ formData.currency || 'CNY' }}/1K tokens</span>
+      </el-form-item>
+
+      <el-form-item label="货币单位" prop="currency">
+        <el-select v-model="formData.currency" placeholder="选择货币单位">
+          <el-option label="人民币 (CNY)" value="CNY" />
+          <el-option label="美元 (USD)" value="USD" />
+          <el-option label="欧元 (EUR)" value="EUR" />
+        </el-select>
+      </el-form-item>
 
       <!-- 高级设置 -->
       <el-divider content-position="left">高级设置</el-divider>

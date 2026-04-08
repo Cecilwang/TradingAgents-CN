@@ -18,16 +18,14 @@ from app.models.config import (
     MarketCategory, DataSourceGrouping, ModelCatalog, ModelInfo,
     CODEX_DEFAULT_MODEL_NAME, CODEX_DEEP_MODEL_NAME
 )
-from tradingagents.llm_adapters.codex_cli_adapter import get_codex_cli_status
+from tradingagents.llm_adapters.codex_cli_adapter import (
+    get_codex_cli_pricing,
+    get_codex_cli_status,
+)
 
 logger = logging.getLogger(__name__)
 
 CODEX_CONTEXT_LENGTH = 272000
-CODEX_MINI_INPUT_PRICE_PER_1K = 0.00075
-CODEX_MINI_OUTPUT_PRICE_PER_1K = 0.0045
-CODEX_DEEP_INPUT_PRICE_PER_1K = 0.0025
-CODEX_DEEP_OUTPUT_PRICE_PER_1K = 0.015
-CODEX_CURRENCY = "USD"
 
 
 class ConfigService:
@@ -53,6 +51,42 @@ class ConfigService:
         if hasattr(provider, "value"):
             return str(provider.value)
         return str(provider)
+
+    def _get_codex_pricing(self, model_name: str) -> Dict[str, Any]:
+        pricing = get_codex_cli_pricing(model_name)
+        if pricing:
+            return pricing
+        return {
+            "input_price_per_1k": None,
+            "output_price_per_1k": None,
+            "currency": "CNY",
+        }
+
+    def _apply_model_catalog_pricing_to_llm_configs(
+        self,
+        llm_configs: List[LLMConfig],
+        catalog: ModelCatalog,
+    ) -> int:
+        """把模型目录中的价格同步到同 provider / model_name 的 LLM 配置。"""
+        pricing_map: Dict[str, ModelInfo] = {model.name: model for model in catalog.models}
+        target_provider = self._normalize_provider_name(catalog.provider).lower()
+        updated_count = 0
+
+        for llm_config in llm_configs:
+            llm_provider = self._normalize_provider_name(llm_config.provider).lower()
+            if llm_provider != target_provider:
+                continue
+
+            matched_model = pricing_map.get(llm_config.model_name)
+            if not matched_model:
+                continue
+
+            llm_config.input_price_per_1k = matched_model.input_price_per_1k
+            llm_config.output_price_per_1k = matched_model.output_price_per_1k
+            llm_config.currency = matched_model.currency or llm_config.currency or "CNY"
+            updated_count += 1
+
+        return updated_count
 
     # ==================== 市场分类管理 ====================
 
@@ -410,6 +444,8 @@ class ConfigService:
     
     async def _create_default_config(self) -> SystemConfig:
         """创建默认系统配置"""
+        codex_quick_pricing = self._get_codex_pricing(CODEX_DEFAULT_MODEL_NAME)
+        codex_deep_pricing = self._get_codex_pricing(CODEX_DEEP_MODEL_NAME)
         default_config = SystemConfig(
             config_name="默认配置",
             config_type="system",
@@ -434,9 +470,9 @@ class ConfigService:
                     features=["tool_calling", "reasoning", "fast_response"],
                     recommended_depths=["快速", "基础", "标准"],
                     performance_metrics={"speed": 5, "cost": 3, "quality": 4},
-                    input_price_per_1k=CODEX_MINI_INPUT_PRICE_PER_1K,
-                    output_price_per_1k=CODEX_MINI_OUTPUT_PRICE_PER_1K,
-                    currency=CODEX_CURRENCY,
+                    input_price_per_1k=codex_quick_pricing["input_price_per_1k"],
+                    output_price_per_1k=codex_quick_pricing["output_price_per_1k"],
+                    currency=codex_quick_pricing["currency"],
                 ),
                 LLMConfig(
                     provider=ModelProvider.CODEX,
@@ -458,9 +494,9 @@ class ConfigService:
                     features=["tool_calling", "reasoning", "long_context"],
                     recommended_depths=["标准", "深度", "全面"],
                     performance_metrics={"speed": 3, "cost": 2, "quality": 5},
-                    input_price_per_1k=CODEX_DEEP_INPUT_PRICE_PER_1K,
-                    output_price_per_1k=CODEX_DEEP_OUTPUT_PRICE_PER_1K,
-                    currency=CODEX_CURRENCY,
+                    input_price_per_1k=codex_deep_pricing["input_price_per_1k"],
+                    output_price_per_1k=codex_deep_pricing["output_price_per_1k"],
+                    currency=codex_deep_pricing["currency"],
                 ),
                 LLMConfig(
                     provider=ModelProvider.OPENAI,
@@ -2402,7 +2438,22 @@ class ConfigService:
                 upsert=True
             )
 
-            return result.acknowledged
+            if not result.acknowledged:
+                return False
+
+            system_config = await self.get_system_config()
+            if system_config:
+                updated_count = self._apply_model_catalog_pricing_to_llm_configs(
+                    system_config.llm_configs,
+                    catalog,
+                )
+                if updated_count > 0:
+                    print(
+                        f"🔄 从 model_catalog 同步 {updated_count} 个 LLM 定价到当前激活配置: {catalog.provider}"
+                    )
+                    return await self.save_system_config(system_config)
+
+            return True
         except Exception as e:
             print(f"保存模型目录失败: {e}")
             return False
@@ -2446,6 +2497,8 @@ class ConfigService:
 
     def _get_default_model_catalog(self) -> List[Dict[str, Any]]:
         """获取默认模型目录数据"""
+        codex_quick_pricing = self._get_codex_pricing(CODEX_DEFAULT_MODEL_NAME)
+        codex_deep_pricing = self._get_codex_pricing(CODEX_DEEP_MODEL_NAME)
         return [
             {
                 "provider": "codex",
@@ -2456,18 +2509,18 @@ class ConfigService:
                         "display_name": CODEX_DEFAULT_MODEL_NAME,
                         "description": "适合快速分析、低延迟任务和轻量工具调用",
                         "context_length": CODEX_CONTEXT_LENGTH,
-                        "input_price_per_1k": CODEX_MINI_INPUT_PRICE_PER_1K,
-                        "output_price_per_1k": CODEX_MINI_OUTPUT_PRICE_PER_1K,
-                        "currency": CODEX_CURRENCY,
+                        "input_price_per_1k": codex_quick_pricing["input_price_per_1k"],
+                        "output_price_per_1k": codex_quick_pricing["output_price_per_1k"],
+                        "currency": codex_quick_pricing["currency"],
                     },
                     {
                         "name": CODEX_DEEP_MODEL_NAME,
                         "display_name": CODEX_DEEP_MODEL_NAME,
                         "description": "适合复杂推理与更高质量的分析任务",
                         "context_length": CODEX_CONTEXT_LENGTH,
-                        "input_price_per_1k": CODEX_DEEP_INPUT_PRICE_PER_1K,
-                        "output_price_per_1k": CODEX_DEEP_OUTPUT_PRICE_PER_1K,
-                        "currency": CODEX_CURRENCY,
+                        "input_price_per_1k": codex_deep_pricing["input_price_per_1k"],
+                        "output_price_per_1k": codex_deep_pricing["output_price_per_1k"],
+                        "currency": codex_deep_pricing["currency"],
                     },
                 ]
             },

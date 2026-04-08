@@ -3,6 +3,7 @@ import asyncio
 from app.services.config_service import ConfigService
 from tradingagents.config.config_manager import ConfigManager
 from tradingagents.config.usage_models import PricingConfig
+from tradingagents.llm_adapters.codex_cli_adapter import get_codex_cli_pricing
 
 
 def test_config_manager_calculate_cost_normalizes_codex_exec_model_names(tmp_path):
@@ -60,3 +61,13 @@ def test_default_config_contains_codex_usd_pricing():
     assert codex_models["codex-gpt-5.4"].input_price_per_1k == 0.0025
     assert codex_models["codex-gpt-5.4"].output_price_per_1k == 0.015
     assert codex_models["codex-gpt-5.4"].currency == "USD"
+
+
+def test_codex_cli_pricing_normalizes_reasoning_variants():
+    pricing = get_codex_cli_pricing("codex-gpt-5.4-medium")
+
+    assert pricing == {
+        "input_price_per_1k": 0.0025,
+        "output_price_per_1k": 0.015,
+        "currency": "USD",
+    }
