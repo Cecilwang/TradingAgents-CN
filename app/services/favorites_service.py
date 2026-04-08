@@ -2,12 +2,12 @@
 自选股服务
 """
 
+import re
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
 
 from app.core.database import get_mongo_db
-from app.models.user import FavoriteStock
 from app.services.quotes_service import get_quotes_service
 
 
@@ -54,7 +54,226 @@ class FavoritesService:
             "volume": None,
         }
 
-    async def get_user_favorites(self, user_id: str) -> List[Dict[str, Any]]:
+    def _infer_market_from_code(self, stock_code: Optional[str]) -> str:
+        """根据股票代码推断市场。"""
+        code = str(stock_code or "").strip().upper()
+        if not code:
+            return "CN"
+        if code.endswith(".HK") or re.match(r"^\d{4,5}$", code):
+            return "HK"
+        if code.endswith(".US"):
+            return "US"
+        if re.match(r"^\d{6}(\.(SH|SZ|BJ))?$", code):
+            return "CN"
+        return "US"
+
+    def _normalize_market(self, market: Optional[str], stock_code: Optional[str]) -> str:
+        """标准化市场标识。"""
+        value = str(market or "").strip()
+        if value in {"A股", "沪深", "CN"}:
+            return "CN"
+        if value in {"港股", "HK"}:
+            return "HK"
+        if value in {"美股", "US"}:
+            return "US"
+        return self._infer_market_from_code(stock_code)
+
+    def _normalize_code_for_market(self, stock_code: Optional[str], market: str) -> str:
+        """按市场标准化股票代码。"""
+        code = str(stock_code or "").strip().upper()
+        if not code:
+            return ""
+
+        if market == "CN":
+            matched = re.match(r"^(\d{6})\.(SH|SZ|BJ)$", code)
+            if matched:
+                return matched.group(1)
+            digits = "".join(ch for ch in code if ch.isdigit())
+            if digits and len(digits) <= 6:
+                return digits.zfill(6)
+            return code
+
+        if market == "HK":
+            if code.endswith(".HK"):
+                code = code[:-3]
+            digits = "".join(ch for ch in code if ch.isdigit())
+            if digits:
+                return digits.zfill(5)
+            return code
+
+        if code.endswith(".US"):
+            return code[:-3]
+        return code
+
+    def _apply_quote(self, item: Dict[str, Any], quote: Dict[str, Any]) -> None:
+        """把行情字典写回自选项。"""
+        current_price = quote.get("close")
+        if current_price is None:
+            current_price = quote.get("price")
+        if current_price is None:
+            current_price = quote.get("current_price")
+
+        change_percent = quote.get("pct_chg")
+        if change_percent is None:
+            change_percent = quote.get("change_percent")
+
+        item["current_price"] = current_price
+        item["change_percent"] = change_percent
+        item["volume"] = quote.get("volume")
+
+    def _build_targets(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """为自选项补齐市场和标准化代码。"""
+        targets: List[Dict[str, Any]] = []
+        for item in items:
+            market = self._normalize_market(item.get("market"), item.get("stock_code"))
+            code = self._normalize_code_for_market(item.get("stock_code"), market)
+            targets.append({
+                "item": item,
+                "market": market,
+                "code": code,
+            })
+        return targets
+
+    async def _load_quotes_from_mongo(
+        self,
+        db,
+        collection_name: str,
+        codes: List[str],
+        market: str,
+    ) -> Dict[str, Dict[str, Any]]:
+        """从指定 market_quotes 集合批量读取行情。"""
+        if not codes:
+            return {}
+
+        cursor = db[collection_name].find(
+            {"code": {"$in": codes}},
+            {"code": 1, "close": 1, "pct_chg": 1, "price": 1, "change_percent": 1, "volume": 1, "_id": 0},
+        )
+        docs = await cursor.to_list(length=None)
+        return {
+            self._normalize_code_for_market(doc.get("code"), market): doc
+            for doc in (docs or [])
+        }
+
+    async def get_user_favorites_cn(
+        self,
+        db,
+        targets: List[Dict[str, Any]],
+        allow_online_quote_fallback: bool = True,
+    ) -> None:
+        """处理A股自选项的基础信息和行情富集。"""
+        codes = [target["code"] for target in targets if target["code"]]
+        if not codes:
+            return
+
+        try:
+            # 只按当前优先级最高的A股数据源补基础信息。
+            from app.core.unified_config import UnifiedConfigManager
+
+            config = UnifiedConfigManager()
+            data_source_configs = await config.get_data_source_configs_async()
+            enabled_sources = [
+                ds.type.lower() for ds in data_source_configs
+                if ds.enabled and ds.type.lower() in ['tushare', 'akshare', 'baostock']
+            ]
+            if not enabled_sources:
+                enabled_sources = ['tushare', 'akshare', 'baostock']
+
+            preferred_source = enabled_sources[0] if enabled_sources else 'tushare'
+            cursor = db["stock_basic_info"].find(
+                {"code": {"$in": codes}, "source": preferred_source},
+                {"code": 1, "sse": 1, "market": 1, "_id": 0}
+            )
+            basic_docs = await cursor.to_list(length=None)
+            basic_map = {str(doc.get("code")).zfill(6): doc for doc in (basic_docs or [])}
+
+            for target in targets:
+                basic = basic_map.get(target["code"])
+                if basic:
+                    target["item"]["board"] = basic.get("market", "-")
+                    target["item"]["exchange"] = basic.get("sse", "-")
+                else:
+                    target["item"]["board"] = "-"
+                    target["item"]["exchange"] = "-"
+        except Exception:
+            for target in targets:
+                target["item"]["board"] = "-"
+                target["item"]["exchange"] = "-"
+
+        quotes_map = await self._load_quotes_from_mongo(db, "market_quotes", codes, "CN")
+        missing_codes: List[str] = []
+        for target in targets:
+            quote = quotes_map.get(target["code"])
+            if quote:
+                self._apply_quote(target["item"], quote)
+            else:
+                missing_codes.append(target["code"])
+
+        if not allow_online_quote_fallback or not missing_codes:
+            return
+
+        try:
+            quotes_online = await get_quotes_service().get_quotes(missing_codes)
+            for target in targets:
+                if target["item"].get("current_price") is not None:
+                    continue
+                quote = (quotes_online or {}).get(target["code"])
+                if quote:
+                    self._apply_quote(target["item"], quote)
+        except Exception:
+            pass
+
+    async def get_user_favorites_foreign(
+        self,
+        db,
+        targets: List[Dict[str, Any]],
+        allow_online_quote_fallback: bool = True,
+    ) -> None:
+        """处理港股和美股自选项的行情富集。"""
+        hk_codes = [target["code"] for target in targets if target["market"] == "HK" and target["code"]]
+        us_codes = [target["code"] for target in targets if target["market"] == "US" and target["code"]]
+
+        hk_quotes = await self._load_quotes_from_mongo(db, "market_quotes_hk", hk_codes, "HK")
+        us_quotes = await self._load_quotes_from_mongo(db, "market_quotes_us", us_codes, "US")
+
+        missing_targets: List[Dict[str, Any]] = []
+        for target in targets:
+            target["item"]["board"] = target["item"].get("board", "-")
+            target["item"]["exchange"] = target["item"].get("exchange", "-")
+
+            if target["market"] == "HK":
+                quote = hk_quotes.get(target["code"])
+            else:
+                quote = us_quotes.get(target["code"])
+
+            if quote:
+                self._apply_quote(target["item"], quote)
+            else:
+                missing_targets.append(target)
+
+        if not allow_online_quote_fallback or not missing_targets:
+            return
+
+        try:
+            from app.services.foreign_stock_service import ForeignStockService
+
+            foreign_service = ForeignStockService(db=db)
+            for target in missing_targets:
+                quote = await foreign_service.get_quote(
+                    target["market"],
+                    target["code"],
+                    force_refresh=False,
+                )
+                if quote:
+                    self._apply_quote(target["item"], quote)
+        except Exception:
+            pass
+
+    async def get_user_favorites(
+        self,
+        user_id: str,
+        allow_online_quote_fallback: bool = True,
+    ) -> List[Dict[str, Any]]:
         """获取用户自选股列表，并批量拉取实时行情进行富集（兼容字符串ID与ObjectId）。"""
         db = await self._get_db()
 
@@ -72,82 +291,28 @@ class FavoritesService:
 
         # 先格式化基础字段
         items = [self._format_favorite(fav) for fav in favorites]
+        if not items:
+            return items
 
-        # 批量获取股票基础信息（板块等）
-        codes = [it.get("stock_code") for it in items if it.get("stock_code")]
-        if codes:
-            try:
-                # 🔥 获取数据源优先级配置
-                from app.core.unified_config import UnifiedConfigManager
-                config = UnifiedConfigManager()
-                data_source_configs = await config.get_data_source_configs_async()
+        targets = [target for target in self._build_targets(items) if target["code"]]
+        if not targets:
+            return items
 
-                # 提取启用的数据源，按优先级排序
-                enabled_sources = [
-                    ds.type.lower() for ds in data_source_configs
-                    if ds.enabled and ds.type.lower() in ['tushare', 'akshare', 'baostock']
-                ]
+        cn_targets = [target for target in targets if target["market"] == "CN"]
+        foreign_targets = [target for target in targets if target["market"] in {"HK", "US"}]
 
-                if not enabled_sources:
-                    enabled_sources = ['tushare', 'akshare', 'baostock']
-
-                preferred_source = enabled_sources[0] if enabled_sources else 'tushare'
-
-                # 从 stock_basic_info 获取板块信息（只查询优先级最高的数据源）
-                basic_info_coll = db["stock_basic_info"]
-                cursor = basic_info_coll.find(
-                    {"code": {"$in": codes}, "source": preferred_source},  # 🔥 添加数据源筛选
-                    {"code": 1, "sse": 1, "market": 1, "_id": 0}
-                )
-                basic_docs = await cursor.to_list(length=None)
-                basic_map = {str(d.get("code")).zfill(6): d for d in (basic_docs or [])}
-
-                for it in items:
-                    code = it.get("stock_code")
-                    basic = basic_map.get(code)
-                    if basic:
-                        # market 字段表示板块（主板、创业板、科创板等）
-                        it["board"] = basic.get("market", "-")
-                        # sse 字段表示交易所（上海证券交易所、深圳证券交易所等）
-                        it["exchange"] = basic.get("sse", "-")
-                    else:
-                        it["board"] = "-"
-                        it["exchange"] = "-"
-            except Exception as e:
-                # 查询失败时设置默认值
-                for it in items:
-                    it["board"] = "-"
-                    it["exchange"] = "-"
-
-        # 批量获取行情（优先使用入库的 market_quotes，30秒更新）
-        if codes:
-            try:
-                coll = db["market_quotes"]
-                cursor = coll.find({"code": {"$in": codes}}, {"code": 1, "close": 1, "pct_chg": 1, "amount": 1})
-                docs = await cursor.to_list(length=None)
-                quotes_map = {str(d.get("code")).zfill(6): d for d in (docs or [])}
-                for it in items:
-                    code = it.get("stock_code")
-                    q = quotes_map.get(code)
-                    if q:
-                        it["current_price"] = q.get("close")
-                        it["change_percent"] = q.get("pct_chg")
-                # 兜底：对未命中的代码使用在线源补齐（可选）
-                missing = [c for c in codes if c not in quotes_map]
-                if missing:
-                    try:
-                        quotes_online = await get_quotes_service().get_quotes(missing)
-                        for it in items:
-                            code = it.get("stock_code")
-                            if it.get("current_price") is None:
-                                q2 = quotes_online.get(code, {}) if quotes_online else {}
-                                it["current_price"] = q2.get("close")
-                                it["change_percent"] = q2.get("pct_chg")
-                    except Exception:
-                        pass
-            except Exception:
-                # 查询失败时保持占位 None，避免影响基础功能
-                pass
+        if cn_targets:
+            await self.get_user_favorites_cn(
+                db,
+                cn_targets,
+                allow_online_quote_fallback=allow_online_quote_fallback,
+            )
+        if foreign_targets:
+            await self.get_user_favorites_foreign(
+                db,
+                foreign_targets,
+                allow_online_quote_fallback=allow_online_quote_fallback,
+            )
 
         return items
 
@@ -170,7 +335,7 @@ class FavoritesService:
             logger.info(f"🔧 [add_favorite] 开始添加自选股: user_id={user_id}, stock_code={stock_code}")
 
             db = await self._get_db()
-            logger.info(f"🔧 [add_favorite] 数据库连接获取成功")
+            logger.info("🔧 [add_favorite] 数据库连接获取成功")
 
             favorite_stock = {
                 "stock_code": stock_code,
@@ -189,7 +354,7 @@ class FavoritesService:
             logger.info(f"🔧 [add_favorite] 用户ID类型检查: is_valid_object_id={is_oid}")
 
             if is_oid:
-                logger.info(f"🔧 [add_favorite] 使用 ObjectId 方式添加到 users 集合")
+                logger.info("🔧 [add_favorite] 使用 ObjectId 方式添加到 users 集合")
 
                 # 先尝试使用 ObjectId 查询
                 result = await db.users.update_one(
@@ -203,7 +368,7 @@ class FavoritesService:
 
                 # 如果 ObjectId 查询失败，尝试使用字符串查询
                 if result.matched_count == 0:
-                    logger.info(f"🔧 [add_favorite] ObjectId查询失败，尝试使用字符串ID查询")
+                    logger.info("🔧 [add_favorite] ObjectId查询失败，尝试使用字符串ID查询")
                     result = await db.users.update_one(
                         {"_id": user_id},
                         {
@@ -216,7 +381,7 @@ class FavoritesService:
                 logger.info(f"🔧 [add_favorite] 返回结果: {success}")
                 return success
             else:
-                logger.info(f"🔧 [add_favorite] 使用字符串ID方式添加到 user_favorites 集合")
+                logger.info("🔧 [add_favorite] 使用字符串ID方式添加到 user_favorites 集合")
                 result = await db.user_favorites.update_one(
                     {"user_id": user_id},
                     {
@@ -227,7 +392,7 @@ class FavoritesService:
                     upsert=True
                 )
                 logger.info(f"🔧 [add_favorite] 更新结果: matched_count={result.matched_count}, modified_count={result.modified_count}, upserted_id={result.upserted_id}")
-                logger.info(f"🔧 [add_favorite] 返回结果: True")
+                logger.info("🔧 [add_favorite] 返回结果: True")
                 return True
         except Exception as e:
             logger.error(f"❌ [add_favorite] 添加自选股异常: {type(e).__name__}: {str(e)}", exc_info=True)
@@ -336,7 +501,7 @@ class FavoritesService:
 
                 # 如果 ObjectId 查询失败，尝试使用字符串查询
                 if user is None:
-                    logger.info(f"🔧 [is_favorite] ObjectId查询未找到，尝试使用字符串ID查询")
+                    logger.info("🔧 [is_favorite] ObjectId查询未找到，尝试使用字符串ID查询")
                     user = await db.users.find_one(
                         {
                             "_id": user_id,
