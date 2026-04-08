@@ -8,6 +8,20 @@ import chromadb
 from chromadb.config import Settings
 
 
+def _create_ephemeral_client():
+    """优先使用显式的临时客户端，避免新版本 Chroma 走 tenant 校验。"""
+    settings = Settings(
+        allow_reset=True,
+        anonymized_telemetry=False,
+        is_persistent=False,
+    )
+
+    if hasattr(chromadb, "EphemeralClient"):
+        return chromadb.EphemeralClient(settings=settings)
+
+    return chromadb.Client(settings)
+
+
 def is_windows_11() -> bool:
     """
     检测是否为 Windows 11
@@ -40,20 +54,8 @@ def get_win10_chromadb_client():
     Returns:
         chromadb.Client: ChromaDB 客户端实例
     """
-    settings = Settings(
-        allow_reset=True,
-        anonymized_telemetry=False,
-        is_persistent=False,
-        # Windows 10 特定配置
-        chroma_db_impl="duckdb+parquet",
-        chroma_api_impl="chromadb.api.segment.SegmentAPI",
-        # 使用临时目录避免权限问题
-        persist_directory=None
-    )
-    
     try:
-        client = chromadb.Client(settings)
-        return client
+        return _create_ephemeral_client()
     except Exception as e:
         # 降级到最基本配置
         basic_settings = Settings(
@@ -70,20 +72,8 @@ def get_win11_chromadb_client():
     Returns:
         chromadb.Client: ChromaDB 客户端实例
     """
-    # Windows 11 对 ChromaDB 支持更好，可以使用更现代的配置
-    settings = Settings(
-        allow_reset=True,
-        anonymized_telemetry=False,  # 禁用遥测避免 posthog 错误
-        is_persistent=False,
-        # Windows 11 可以使用默认实现，性能更好
-        chroma_db_impl="duckdb+parquet",
-        chroma_api_impl="chromadb.api.segment.SegmentAPI"
-        # 移除 persist_directory=None，让它使用默认值
-    )
-    
     try:
-        client = chromadb.Client(settings)
-        return client
+        return _create_ephemeral_client()
     except Exception as e:
         # 如果还有问题，使用最简配置
         minimal_settings = Settings(
@@ -113,19 +103,14 @@ def get_optimal_chromadb_client():
             return get_win10_chromadb_client()
     else:
         # 非 Windows 系统，使用标准配置
-        settings = Settings(
-            allow_reset=True,
-            anonymized_telemetry=False,
-            is_persistent=False
-        )
-        return chromadb.Client(settings)
+        return _create_ephemeral_client()
 
 
 # 导出配置
 __all__ = [
+    '_create_ephemeral_client',
     'get_optimal_chromadb_client',
     'get_win10_chromadb_client',
     'get_win11_chromadb_client',
     'is_windows_11'
 ]
-
