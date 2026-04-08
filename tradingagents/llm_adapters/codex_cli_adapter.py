@@ -199,6 +199,7 @@ class ChatCodexCLI(BaseChatModel):
             tools=request["tools"],
             tool_choice=request["tool_choice"],
             parallel_tool_calls=request["parallel_tool_calls"],
+            resume_session_id=request["resume_session_id"],
         )
         execution_kwargs = {
             "tools": request["tools"],
@@ -240,6 +241,7 @@ class ChatCodexCLI(BaseChatModel):
             tools=request["tools"],
             tool_choice=request["tool_choice"],
             parallel_tool_calls=request["parallel_tool_calls"],
+            resume_session_id=request["resume_session_id"],
         )
         execution_kwargs = {
             "tools": request["tools"],
@@ -281,6 +283,7 @@ class ChatCodexCLI(BaseChatModel):
             tools=request["tools"],
             tool_choice=request["tool_choice"],
             parallel_tool_calls=request["parallel_tool_calls"],
+            resume_session_id=request["resume_session_id"],
         )
         stream_state: Dict[str, Any] = {
             "saw_text": False,
@@ -346,6 +349,7 @@ class ChatCodexCLI(BaseChatModel):
             tools=request["tools"],
             tool_choice=request["tool_choice"],
             parallel_tool_calls=request["parallel_tool_calls"],
+            resume_session_id=request["resume_session_id"],
         )
         stream_state: Dict[str, Any] = {
             "saw_text": False,
@@ -687,8 +691,17 @@ class ChatCodexCLI(BaseChatModel):
         tools: Optional[Sequence[Dict[str, Any]]],
         tool_choice: Optional[str],
         parallel_tool_calls: Optional[bool],
+        resume_session_id: Optional[str] = None,
     ) -> str:
         """构建传给 `codex exec` 的统一提示词。"""
+        if resume_session_id:
+            return self._build_resume_cli_prompt(
+                messages,
+                tools=tools,
+                tool_choice=tool_choice,
+                parallel_tool_calls=parallel_tool_calls,
+            )
+
         tool_definitions = list(tools or [])
         prompt_sections = [
             "你正在作为 TradingAgents 的本地 Codex CLI 模型后端工作。",
@@ -729,6 +742,48 @@ class ChatCodexCLI(BaseChatModel):
             )
 
         prompt_sections.append("会话消息如下：")
+        prompt_sections.append(
+            json.dumps(self._serialize_messages(messages), ensure_ascii=False, indent=2)
+        )
+
+        return "\n\n".join(prompt_sections)
+
+    def _build_resume_cli_prompt(
+        self,
+        messages: List[BaseMessage],
+        *,
+        tools: Optional[Sequence[Dict[str, Any]]],
+        tool_choice: Optional[str],
+        parallel_tool_calls: Optional[bool],
+    ) -> str:
+        """为 resume 路径构造精简续写提示，避免重复发送首轮包装。"""
+        tool_definitions = list(tools or [])
+        prompt_sections = [
+            "继续当前 Codex 会话。",
+            '保持 JSON {"content": string, "tool_calls": array} 输出。',
+        ]
+
+        if tool_definitions:
+            prompt_sections.append("本轮工具定义如下：")
+            prompt_sections.append(
+                json.dumps(tool_definitions, ensure_ascii=False, indent=2)
+            )
+        else:
+            prompt_sections.append("本轮无工具，tool_calls 必须为空数组。")
+
+        if parallel_tool_calls is False:
+            prompt_sections.append("本轮最多只能返回一个工具调用。")
+
+        if tool_choice == "required":
+            prompt_sections.append("本轮至少必须请求一个工具调用。")
+        elif tool_choice == "none":
+            prompt_sections.append("本轮禁止调用工具，tool_calls 必须为空数组。")
+        elif tool_choice == "auto":
+            prompt_sections.append("本轮可自行决定是否调用工具。")
+        elif tool_choice:
+            prompt_sections.append(f"本轮只能调用指定工具：{tool_choice}。")
+
+        prompt_sections.append("新增消息如下：")
         prompt_sections.append(
             json.dumps(self._serialize_messages(messages), ensure_ascii=False, indent=2)
         )

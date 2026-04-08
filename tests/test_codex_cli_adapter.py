@@ -94,6 +94,38 @@ def test_build_codex_command_resume_omits_schema_and_sandbox():
     assert "-o" in command
 
 
+def test_build_cli_prompt_uses_full_wrapper_without_resume():
+    llm = ChatCodexCLI(model="gpt-5.4")
+
+    prompt = llm._build_cli_prompt(
+        [HumanMessage(content="请分析腾讯")],
+        tools=[],
+        tool_choice=None,
+        parallel_tool_calls=None,
+    )
+
+    assert "你正在作为 TradingAgents 的本地 Codex CLI 模型后端工作。" in prompt
+    assert "会话消息如下：" in prompt
+    assert "新增消息如下：" not in prompt
+
+
+def test_build_cli_prompt_uses_slim_wrapper_with_resume():
+    llm = ChatCodexCLI(model="gpt-5.4")
+
+    prompt = llm._build_cli_prompt(
+        [HumanMessage(content="继续反驳保守派")],
+        tools=[],
+        tool_choice=None,
+        parallel_tool_calls=None,
+        resume_session_id="thread_existing",
+    )
+
+    assert "继续当前 Codex 会话。" in prompt
+    assert "新增消息如下：" in prompt
+    assert "你正在作为 TradingAgents 的本地 Codex CLI 模型后端工作。" not in prompt
+    assert "会话消息如下：" not in prompt
+
+
 def test_parse_codex_response_with_tool_calls():
     llm = ChatCodexCLI(model="gpt-5.4")
 
