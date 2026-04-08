@@ -58,8 +58,7 @@ def create_neutral_debator(llm):
 
         continuation_prompt = f"""继续以中性风险分析师身份推进当前讨论。
 
-你在当前会话里已经掌握完整研究报告、交易员方案和你此前的平衡立场。
-这轮只需要回应新增的对立观点，不要重复完整背景。
+直接回应以下对手的最新论点，不要重复完整背景。
 
 激进分析师最新论点：
 {current_risky_response}
