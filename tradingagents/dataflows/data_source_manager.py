@@ -1646,6 +1646,32 @@ class DataSourceManager:
         logger.error(f"❌ 所有数据源都无法获取{symbol}的股票信息")
         return {'symbol': symbol, 'name': f'股票{symbol}', 'source': 'unknown'}
 
+    def _split_cn_stock_symbol(self, symbol: str) -> tuple[str, Optional[str]]:
+        """拆分 A 股代码，兼容 ts_code、BaoStock 和 AKShare 常见格式。"""
+        normalized_symbol = symbol.strip()
+        market: Optional[str] = None
+
+        if '.' in normalized_symbol:
+            left, right = normalized_symbol.split('.', 1)
+            if left.lower() in {'sh', 'sz', 'bj'} and right.isdigit():
+                return right, left.lower()
+            if right.upper() in {'SH', 'SZ', 'BJ'}:
+                normalized_symbol = left
+                market = right.lower()
+
+        if normalized_symbol.lower().startswith(('sh', 'sz', 'bj')) and normalized_symbol[2:].isdigit():
+            return normalized_symbol[2:], normalized_symbol[:2].lower()
+
+        if market is None and normalized_symbol.isdigit():
+            if normalized_symbol.startswith('6'):
+                market = 'sh'
+            elif normalized_symbol.startswith(('8', '4')):
+                market = 'bj'
+            elif normalized_symbol.startswith(('0', '2', '3')):
+                market = 'sz'
+
+        return normalized_symbol, market
+
     def _get_akshare_stock_info(self, symbol: str) -> Dict:
         """使用AKShare获取股票基本信息
 
@@ -1656,20 +1682,15 @@ class DataSourceManager:
         try:
             import akshare as ak
 
+            normalized_symbol, market = self._split_cn_stock_symbol(symbol)
+
             # 🔥 转换为 AKShare 格式的股票代码
             # AKShare 的 stock_individual_info_em 需要使用 "sz000001" 或 "sh600000" 格式
-            if symbol.startswith('6'):
-                # 上海股票：600000 -> sh600000
-                akshare_symbol = f"sh{symbol}"
-            elif symbol.startswith(('0', '3', '2')):
-                # 深圳股票：000001 -> sz000001
-                akshare_symbol = f"sz{symbol}"
-            elif symbol.startswith(('8', '4')):
-                # 北京股票：830000 -> bj830000
-                akshare_symbol = f"bj{symbol}"
+            if market in {'sh', 'sz', 'bj'} and normalized_symbol.isdigit():
+                akshare_symbol = f"{market}{normalized_symbol}"
             else:
                 # 其他情况，直接使用原始代码
-                akshare_symbol = symbol
+                akshare_symbol = normalized_symbol
 
             logger.debug(f"📊 [AKShare股票信息] 原始代码: {symbol}, AKShare格式: {akshare_symbol}")
 
@@ -1710,11 +1731,13 @@ class DataSourceManager:
         try:
             import baostock as bs
 
+            normalized_symbol, market = self._split_cn_stock_symbol(symbol)
+
             # 转换股票代码格式
-            if symbol.startswith('6'):
-                bs_code = f"sh.{symbol}"
+            if market in {'sh', 'sz', 'bj'} and normalized_symbol.isdigit():
+                bs_code = f"{market}.{normalized_symbol}"
             else:
-                bs_code = f"sz.{symbol}"
+                bs_code = normalized_symbol
 
             # 登录BaoStock
             lg = bs.login()
