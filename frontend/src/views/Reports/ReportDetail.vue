@@ -850,8 +850,14 @@ const formatStructuredModuleContent = (value: unknown): string => {
   }
 
   if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const contentValue = record.content
+    if (typeof contentValue === 'string' && contentValue.trim()) {
+      return contentValue.trim()
+    }
+
     const lines: string[] = []
-    for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+    for (const [key, nestedValue] of Object.entries(record)) {
       const text = formatStructuredModuleContent(nestedValue)
       if (!text) continue
       if (text.includes('\n')) {
