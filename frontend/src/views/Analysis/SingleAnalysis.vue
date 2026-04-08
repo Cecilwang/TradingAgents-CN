@@ -579,9 +579,9 @@
                   <h4>📊 分析概览</h4>
                   <div class="overview-card">
   
-                    <div v-if="analysisResults.summary" class="overview-summary">
+                    <div v-if="analysisSummary" class="overview-summary">
                       <h5>分析摘要:</h5>
-                      <p>{{ analysisResults.summary }}</p>
+                      <div v-html="formatReportContent(analysisSummary)"></div>
                     </div>
 
                     <div v-if="analysisResults.recommendation" class="overview-recommendation">
@@ -1350,6 +1350,68 @@ const getReportDescription = (title: string) => {
   return descMap[title] || '详细分析报告'
 }
 
+const formatStructuredModuleContent = (value: unknown): string => {
+  if (value == null) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+
+  if (Array.isArray(value)) {
+    const items = value.map((item) => formatStructuredModuleContent(item)).filter(Boolean)
+    return items.map((item) => `- ${item}`).join('\n')
+  }
+
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const contentValue = record.content
+    if (typeof contentValue === 'string' && contentValue.trim()) {
+      return contentValue.trim()
+    }
+
+    const lines: string[] = []
+    for (const [key, nestedValue] of Object.entries(record)) {
+      const text = formatStructuredModuleContent(nestedValue)
+      if (!text) continue
+      if (text.includes('\n')) {
+        lines.push(`**${key}**`)
+        lines.push(text)
+      } else {
+        lines.push(`**${key}**: ${text}`)
+      }
+    }
+    return lines.join('\n\n').trim()
+  }
+
+  return String(value).trim()
+}
+
+const getModuleDisplayContent = (content: string) => {
+  const trimmed = content.trim()
+  if (!trimmed || !['{', '['].includes(trimmed[0])) {
+    return content
+  }
+
+  try {
+    return formatStructuredModuleContent(JSON.parse(trimmed)) || content
+  } catch {
+    return content
+  }
+}
+
+const analysisSummary = computed(() => {
+  const data = analysisResults.value
+  if (!data) return ''
+
+  const finalTradeDecision = data.reports?.final_trade_decision
+  if (typeof finalTradeDecision === 'string' && finalTradeDecision.trim()) {
+    return getModuleDisplayContent(finalTradeDecision)
+  }
+  if (finalTradeDecision && typeof finalTradeDecision === 'object') {
+    return formatStructuredModuleContent(finalTradeDecision)
+  }
+
+  return data.summary || ''
+})
+
 // 格式化报告内容
 const formatReportContent = (content: any) => {
   console.log('🎨 [DEBUG] formatReportContent 被调用:', {
@@ -1367,16 +1429,18 @@ const formatReportContent = (content: any) => {
   // 如果content不是字符串，转换为字符串
   let stringContent = ''
   if (typeof content === 'string') {
-    stringContent = content
+    stringContent = getModuleDisplayContent(content)
     console.log('✅ [DEBUG] content是字符串，长度:', stringContent.length)
   } else if (typeof content === 'object') {
     // 如果是对象，尝试提取有用信息
     if (content.judge_decision) {
-      stringContent = content.judge_decision
+      stringContent = typeof content.judge_decision === 'string'
+        ? getModuleDisplayContent(content.judge_decision)
+        : formatStructuredModuleContent(content.judge_decision)
       console.log('📝 [DEBUG] 从对象中提取judge_decision')
     } else {
-      stringContent = JSON.stringify(content, null, 2)
-      console.log('📝 [DEBUG] 将对象转换为JSON字符串')
+      stringContent = formatStructuredModuleContent(content)
+      console.log('📝 [DEBUG] 将对象转换为结构化文本')
     }
   } else {
     stringContent = String(content)
