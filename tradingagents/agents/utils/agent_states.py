@@ -1,10 +1,7 @@
-from typing import Annotated, Sequence
-from datetime import date, timedelta, datetime
-from typing_extensions import TypedDict, Optional
-from langchain_openai import ChatOpenAI
-from tradingagents.agents import *
-from langgraph.prebuilt import ToolNode
-from langgraph.graph import END, StateGraph, START, MessagesState
+from typing import Annotated, Dict
+
+from typing_extensions import TypedDict
+from langgraph.graph import MessagesState
 
 # 导入统一日志系统
 from tradingagents.utils.logging_init import get_logger
@@ -54,6 +51,10 @@ class RiskDebateState(TypedDict):
 class AgentState(MessagesState):
     company_of_interest: Annotated[str, "Company that we are interested in trading"]
     trade_date: Annotated[str, "What date we are trading at"]
+    task_id: Annotated[str, "Current analysis task id"]
+    codex_role_sessions: Annotated[
+        Dict[str, str], "Codex role sessions scoped to the current analysis task"
+    ]
 
     sender: Annotated[str, "Agent that sent this message"]
 

@@ -1,9 +1,7 @@
-from langchain_core.messages import AIMessage
-import time
-import json
-
 # 导入统一日志系统
 from tradingagents.utils.logging_init import get_logger
+from tradingagents.agents.utils.codex_session import invoke_role_with_codex_session
+
 logger = get_logger("default")
 
 
@@ -23,7 +21,6 @@ def create_bear_researcher(llm, memory):
         ticker = state.get('company_of_interest', 'Unknown')
         from tradingagents.utils.stock_utils import StockUtils
         market_info = StockUtils.get_market_info(ticker)
-        is_china = market_info['is_china']
 
         # 获取公司名称
         def _get_company_name(ticker_code: str, market_info_dict: dict) -> str:
@@ -66,27 +63,23 @@ def create_bear_researcher(llm, memory):
                 logger.error(f"❌ [空头研究员] 获取公司名称失败: {e}")
             return f"股票代码{ticker_code}"
 
-        company_name = _get_company_name(ticker, market_info)
-        is_hk = market_info['is_hk']
-        is_us = market_info['is_us']
-
         currency = market_info['currency_name']
         currency_symbol = market_info['currency_symbol']
+        def build_full_prompt() -> str:
+            company_name = _get_company_name(ticker, market_info)
+            curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
 
-        curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
+            if memory is not None:
+                past_memories = memory.get_memories(curr_situation, n_matches=2)
+            else:
+                logger.warning("⚠️ [DEBUG] memory为None，跳过历史记忆检索")
+                past_memories = []
 
-        # 安全检查：确保memory不为None
-        if memory is not None:
-            past_memories = memory.get_memories(curr_situation, n_matches=2)
-        else:
-            logger.warning(f"⚠️ [DEBUG] memory为None，跳过历史记忆检索")
-            past_memories = []
+            past_memory_str = ""
+            for rec in past_memories:
+                past_memory_str += rec["recommendation"] + "\n\n"
 
-        past_memory_str = ""
-        for i, rec in enumerate(past_memories, 1):
-            past_memory_str += rec["recommendation"] + "\n\n"
-
-        prompt = f"""你是一位看跌分析师，负责论证不投资股票 {company_name}（股票代码：{ticker}）的理由。
+            return f"""你是一位看跌分析师，负责论证不投资股票 {company_name}（股票代码：{ticker}）的理由。
 
 ⚠️ 重要提醒：当前分析的是 {market_info['market_name']}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。
 ⚠️ 在你的分析中，请始终使用公司名称"{company_name}"而不是股票代码"{ticker}"来称呼这家公司。
@@ -116,7 +109,23 @@ def create_bear_researcher(llm, memory):
 请确保所有回答都使用中文。
 """
 
-        response = llm.invoke(prompt)
+        continuation_prompt = f"""继续以看跌分析师身份，围绕股票 {ticker} 推进同一场辩论。
+
+你在当前会话里已经掌握完整的市场、情绪、新闻、基本面材料，以及你此前的看跌立场。
+这轮你只需要针对最新的看涨论点继续反驳，不要重复背景介绍。
+
+最新看涨论点：
+{current_response}
+
+请直接继续输出中文辩论内容，保持对话风格，不使用特殊格式。"""
+
+        response, updated_codex_role_sessions = invoke_role_with_codex_session(
+            llm=llm,
+            state=state,
+            role_name="Bear Researcher",
+            full_prompt=build_full_prompt,
+            continuation_prompt=continuation_prompt,
+        )
 
         argument = f"Bear Analyst: {response.content}"
 
@@ -131,6 +140,9 @@ def create_bear_researcher(llm, memory):
             "count": new_count,
         }
 
-        return {"investment_debate_state": new_investment_debate_state}
+        return {
+            "investment_debate_state": new_investment_debate_state,
+            "codex_role_sessions": updated_codex_role_sessions,
+        }
 
     return bear_node

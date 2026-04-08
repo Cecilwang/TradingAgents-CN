@@ -45,6 +45,24 @@ def test_build_codex_command_uses_medium_by_default():
     assert 'model_reasoning_effort="medium"' in command
 
 
+def test_build_codex_command_resume_omits_schema_and_sandbox():
+    llm = ChatCodexCLI(model="codex-gpt-5.4")
+
+    command = llm._build_codex_command(
+        schema_path="/tmp/schema.json",
+        output_path="/tmp/output.json",
+        json_output=True,
+        resume_session_id="thread_existing",
+    )
+
+    assert "exec" in command
+    assert "resume" in command
+    assert "thread_existing" in command
+    assert "--json" in command
+    assert "--output-schema" not in command
+    assert "-s" not in command
+
+
 def test_parse_codex_response_with_tool_calls():
     llm = ChatCodexCLI(model="gpt-5.4")
 
@@ -305,6 +323,53 @@ def test_generate_attaches_codex_usage_metadata(monkeypatch):
     }
 
 
+def test_generate_passes_resume_session_id(monkeypatch):
+    llm = ChatCodexCLI(model="gpt-5.4")
+
+    def mock_run_codex_exec(
+        prompt_text: str,
+        *,
+        tools,
+        tool_choice,
+        parallel_tool_calls,
+        resume_session_id=None,
+    ):
+        assert "会话消息如下" in prompt_text
+        assert resume_session_id == "thread_prev"
+        return {
+            "raw_output": json.dumps(
+                {
+                    "content": "继续回应",
+                    "tool_calls": [],
+                },
+                ensure_ascii=False,
+            ),
+            "execution_metadata": {
+                "thread_id": "thread_prev",
+                "usage": {
+                    "input_tokens": 11,
+                    "cached_input_tokens": 3,
+                    "output_tokens": 5,
+                    "total_tokens": 16,
+                },
+            },
+        }
+
+    monkeypatch.setattr(llm, "_run_codex_exec", mock_run_codex_exec)
+
+    result = llm._generate(
+        [HumanMessage(content="继续讨论")],
+        session_id="analysis_1",
+        analysis_type="stock_analysis",
+        resume_session_id="thread_prev",
+    )
+
+    message = result.generations[0].message
+    assert message.content == "继续回应"
+    assert message.response_metadata["session_id"] == "thread_prev"
+    assert message.response_metadata["analysis_session_id"] == "analysis_1"
+
+
 def test_create_llm_by_provider_returns_codex_cli():
     llm = create_llm_by_provider(
         provider="codex",
@@ -386,6 +451,50 @@ def test_run_codex_exec_includes_cli_overrides(monkeypatch):
     assert "exec" in captured["command"]
     assert "--json" in captured["command"]
     assert "workspace-write" in captured["command"]
+
+
+def test_finalize_codex_execution_normalizes_resume_output(tmp_path):
+    llm = ChatCodexCLI(model="gpt-5.4")
+    schema_path = tmp_path / "schema.json"
+    output_path = tmp_path / "output.json"
+    schema_path.write_text("{}", encoding="utf-8")
+    output_path.write_text("继续辩论", encoding="utf-8")
+
+    execution_result = llm._finalize_codex_execution(
+        returncode=0,
+        stdout_text=json.dumps(
+            {
+                "type": "turn.completed",
+                "usage": {
+                    "input_tokens": 12,
+                    "cached_input_tokens": 4,
+                    "output_tokens": 8,
+                },
+            },
+            ensure_ascii=False,
+        ),
+        stderr_text="",
+        schema_path=str(schema_path),
+        output_path=str(output_path),
+        resume_session_id="thread_resume_1",
+    )
+
+    assert execution_result["raw_output"] == json.dumps(
+        {
+            "content": "继续辩论",
+            "tool_calls": [],
+        },
+        ensure_ascii=False,
+    )
+    assert execution_result["execution_metadata"] == {
+        "thread_id": "thread_resume_1",
+        "usage": {
+            "input_tokens": 12,
+            "cached_input_tokens": 4,
+            "output_tokens": 8,
+            "total_tokens": 20,
+        },
+    }
 
 
 def test_bind_tools_normalizes_choice_and_parallel_flag():

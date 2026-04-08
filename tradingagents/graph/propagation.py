@@ -1,15 +1,16 @@
 # TradingAgents/graph/propagation.py
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-# 导入统一日志系统
-from tradingagents.utils.logging_init import get_logger
-logger = get_logger("default")
 from tradingagents.agents.utils.agent_states import (
-    AgentState,
     InvestDebateState,
     RiskDebateState,
 )
+
+# 导入统一日志系统
+from tradingagents.utils.logging_init import get_logger
+
+logger = get_logger("default")
 
 
 class Propagator:
@@ -20,7 +21,7 @@ class Propagator:
         self.max_recur_limit = max_recur_limit
 
     def create_initial_state(
-        self, company_name: str, trade_date: str
+        self, company_name: str, trade_date: str, task_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Create the initial state for the agent graph."""
         from langchain_core.messages import HumanMessage
@@ -33,6 +34,8 @@ class Propagator:
             "messages": [HumanMessage(content=analysis_request)],
             "company_of_interest": company_name,
             "trade_date": str(trade_date),
+            "task_id": task_id or "",
+            "codex_role_sessions": {},
             "investment_debate_state": InvestDebateState(
                 {"history": "", "current_response": "", "count": 0}
             ),

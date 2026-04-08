@@ -1,15 +1,13 @@
-from langchain_core.messages import AIMessage
-import time
-import json
-
 # 导入统一日志系统
 from tradingagents.utils.logging_init import get_logger
+from tradingagents.agents.utils.codex_session import invoke_role_with_codex_session
+
 logger = get_logger("default")
 
 
 def create_bull_researcher(llm, memory):
     def bull_node(state) -> dict:
-        logger.debug(f"🐂 [DEBUG] ===== 看涨研究员节点开始 =====")
+        logger.debug("🐂 [DEBUG] ===== 看涨研究员节点开始 =====")
 
         investment_debate_state = state["investment_debate_state"]
         history = investment_debate_state.get("history", "")
@@ -68,36 +66,36 @@ def create_bull_researcher(llm, memory):
                 logger.error(f"❌ [多头研究员] 获取公司名称失败: {e}")
             return f"股票代码{ticker_code}"
 
-        company_name = _get_company_name(ticker, market_info)
         is_hk = market_info['is_hk']
         is_us = market_info['is_us']
 
         currency = market_info['currency_name']
         currency_symbol = market_info['currency_symbol']
+        def build_full_prompt() -> str:
+            company_name = _get_company_name(ticker, market_info)
 
-        logger.debug(f"🐂 [DEBUG] 接收到的报告:")
-        logger.debug(f"🐂 [DEBUG] - 市场报告长度: {len(market_research_report)}")
-        logger.debug(f"🐂 [DEBUG] - 情绪报告长度: {len(sentiment_report)}")
-        logger.debug(f"🐂 [DEBUG] - 新闻报告长度: {len(news_report)}")
-        logger.debug(f"🐂 [DEBUG] - 基本面报告长度: {len(fundamentals_report)}")
-        logger.debug(f"🐂 [DEBUG] - 基本面报告前200字符: {fundamentals_report[:200]}...")
-        logger.debug(f"🐂 [DEBUG] - 股票代码: {ticker}, 公司名称: {company_name}, 类型: {market_info['market_name']}, 货币: {currency}")
-        logger.debug(f"🐂 [DEBUG] - 市场详情: 中国A股={is_china}, 港股={is_hk}, 美股={is_us}")
+            logger.debug("🐂 [DEBUG] 接收到的报告:")
+            logger.debug(f"🐂 [DEBUG] - 市场报告长度: {len(market_research_report)}")
+            logger.debug(f"🐂 [DEBUG] - 情绪报告长度: {len(sentiment_report)}")
+            logger.debug(f"🐂 [DEBUG] - 新闻报告长度: {len(news_report)}")
+            logger.debug(f"🐂 [DEBUG] - 基本面报告长度: {len(fundamentals_report)}")
+            logger.debug(f"🐂 [DEBUG] - 基本面报告前200字符: {fundamentals_report[:200]}...")
+            logger.debug(f"🐂 [DEBUG] - 股票代码: {ticker}, 公司名称: {company_name}, 类型: {market_info['market_name']}, 货币: {currency}")
+            logger.debug(f"🐂 [DEBUG] - 市场详情: 中国A股={is_china}, 港股={is_hk}, 美股={is_us}")
 
-        curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
+            curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
 
-        # 安全检查：确保memory不为None
-        if memory is not None:
-            past_memories = memory.get_memories(curr_situation, n_matches=2)
-        else:
-            logger.warning(f"⚠️ [DEBUG] memory为None，跳过历史记忆检索")
-            past_memories = []
+            if memory is not None:
+                past_memories = memory.get_memories(curr_situation, n_matches=2)
+            else:
+                logger.warning("⚠️ [DEBUG] memory为None，跳过历史记忆检索")
+                past_memories = []
 
-        past_memory_str = ""
-        for i, rec in enumerate(past_memories, 1):
-            past_memory_str += rec["recommendation"] + "\n\n"
+            past_memory_str = ""
+            for rec in past_memories:
+                past_memory_str += rec["recommendation"] + "\n\n"
 
-        prompt = f"""你是一位看涨分析师，负责为股票 {company_name}（股票代码：{ticker}）的投资建立强有力的论证。
+            return f"""你是一位看涨分析师，负责为股票 {company_name}（股票代码：{ticker}）的投资建立强有力的论证。
 
 ⚠️ 重要提醒：当前分析的是 {'中国A股' if is_china else '海外股票'}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。
 ⚠️ 在你的分析中，请始终使用公司名称"{company_name}"而不是股票代码"{ticker}"来称呼这家公司。
@@ -125,7 +123,23 @@ def create_bull_researcher(llm, memory):
 请确保所有回答都使用中文。
 """
 
-        response = llm.invoke(prompt)
+        continuation_prompt = f"""继续以看涨分析师身份，围绕股票 {ticker} 推进同一场辩论。
+
+你在当前会话里已经掌握完整的市场、情绪、新闻、基本面材料，以及你此前的看涨立场。
+这轮你只需要针对最新的看跌论点继续反驳，不要重复背景介绍。
+
+最新看跌论点：
+{current_response}
+
+请直接继续输出中文辩论内容，保持对话风格，不使用特殊格式。"""
+
+        response, updated_codex_role_sessions = invoke_role_with_codex_session(
+            llm=llm,
+            state=state,
+            role_name="Bull Researcher",
+            full_prompt=build_full_prompt,
+            continuation_prompt=continuation_prompt,
+        )
 
         argument = f"Bull Analyst: {response.content}"
 
@@ -140,6 +154,9 @@ def create_bull_researcher(llm, memory):
             "count": new_count,
         }
 
-        return {"investment_debate_state": new_investment_debate_state}
+        return {
+            "investment_debate_state": new_investment_debate_state,
+            "codex_role_sessions": updated_codex_role_sessions,
+        }
 
     return bull_node

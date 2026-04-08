@@ -167,13 +167,15 @@ class ChatCodexCLI(BaseChatModel):
             tool_choice=request["tool_choice"],
             parallel_tool_calls=request["parallel_tool_calls"],
         )
+        execution_kwargs = {
+            "tools": request["tools"],
+            "tool_choice": request["tool_choice"],
+            "parallel_tool_calls": request["parallel_tool_calls"],
+        }
+        if request["resume_session_id"]:
+            execution_kwargs["resume_session_id"] = request["resume_session_id"]
         execution_result = self._normalize_execution_result(
-            self._run_codex_exec(
-                prompt_text,
-                tools=request["tools"],
-                tool_choice=request["tool_choice"],
-                parallel_tool_calls=request["parallel_tool_calls"],
-            )
+            self._run_codex_exec(prompt_text, **execution_kwargs)
         )
         parsed_response = self._parse_codex_response(
             execution_result["raw_output"],
@@ -206,13 +208,15 @@ class ChatCodexCLI(BaseChatModel):
             tool_choice=request["tool_choice"],
             parallel_tool_calls=request["parallel_tool_calls"],
         )
+        execution_kwargs = {
+            "tools": request["tools"],
+            "tool_choice": request["tool_choice"],
+            "parallel_tool_calls": request["parallel_tool_calls"],
+        }
+        if request["resume_session_id"]:
+            execution_kwargs["resume_session_id"] = request["resume_session_id"]
         execution_result = self._normalize_execution_result(
-            await self._arun_codex_exec(
-                prompt_text,
-                tools=request["tools"],
-                tool_choice=request["tool_choice"],
-                parallel_tool_calls=request["parallel_tool_calls"],
-            )
+            await self._arun_codex_exec(prompt_text, **execution_kwargs)
         )
         parsed_response = self._parse_codex_response(
             execution_result["raw_output"],
@@ -252,14 +256,17 @@ class ChatCodexCLI(BaseChatModel):
             "execution_metadata": {},
         }
 
-        yield from self._stream_codex_exec(
-            prompt_text,
-            tools=request["tools"],
-            tool_choice=request["tool_choice"],
-            parallel_tool_calls=request["parallel_tool_calls"],
-            stream_state=stream_state,
-            run_manager=run_manager,
-        )
+        execution_kwargs = {
+            "tools": request["tools"],
+            "tool_choice": request["tool_choice"],
+            "parallel_tool_calls": request["parallel_tool_calls"],
+            "stream_state": stream_state,
+            "run_manager": run_manager,
+        }
+        if request["resume_session_id"]:
+            execution_kwargs["resume_session_id"] = request["resume_session_id"]
+
+        yield from self._stream_codex_exec(prompt_text, **execution_kwargs)
 
         parsed_response = self._parse_codex_response(
             stream_state["raw_response"],
@@ -314,14 +321,17 @@ class ChatCodexCLI(BaseChatModel):
             "execution_metadata": {},
         }
 
-        async for chunk in self._astream_codex_exec(
-            prompt_text,
-            tools=request["tools"],
-            tool_choice=request["tool_choice"],
-            parallel_tool_calls=request["parallel_tool_calls"],
-            stream_state=stream_state,
-            run_manager=run_manager,
-        ):
+        execution_kwargs = {
+            "tools": request["tools"],
+            "tool_choice": request["tool_choice"],
+            "parallel_tool_calls": request["parallel_tool_calls"],
+            "stream_state": stream_state,
+            "run_manager": run_manager,
+        }
+        if request["resume_session_id"]:
+            execution_kwargs["resume_session_id"] = request["resume_session_id"]
+
+        async for chunk in self._astream_codex_exec(prompt_text, **execution_kwargs):
             yield chunk
 
         parsed_response = self._parse_codex_response(
@@ -574,6 +584,7 @@ class ChatCodexCLI(BaseChatModel):
         """抽取并规整工具调用相关参数，供同步/异步入口共享。"""
         session_id = kwargs.pop("session_id", None)
         analysis_type = kwargs.pop("analysis_type", None)
+        resume_session_id = kwargs.pop("resume_session_id", None)
         strict = kwargs.pop("strict", None)
         tools = self._format_tools(kwargs.pop("tools", None), strict=strict)
         tool_choice = self._normalize_tool_choice(
@@ -598,6 +609,7 @@ class ChatCodexCLI(BaseChatModel):
             "parallel_tool_calls": parallel_tool_calls,
             "session_id": session_id,
             "analysis_type": analysis_type,
+            "resume_session_id": resume_session_id,
         }
 
     def _format_tools(
@@ -955,6 +967,7 @@ class ChatCodexCLI(BaseChatModel):
         schema_path: str,
         output_path: str,
         json_output: bool,
+        resume_session_id: Optional[str] = None,
     ) -> List[str]:
         """构造同步/异步/流式调用共用的 Codex CLI 命令。"""
         command = [
@@ -962,6 +975,8 @@ class ChatCodexCLI(BaseChatModel):
             "-a",
             self.ask_for_approval,
         ]
+        if self.working_dir:
+            command.extend(["-C", self.working_dir])
         command.extend(
             [
                 "-c",
@@ -971,25 +986,24 @@ class ChatCodexCLI(BaseChatModel):
             ]
         )
         command.append("exec")
+        if resume_session_id:
+            command.extend(["resume", resume_session_id])
         if json_output:
             command.append("--json")
         exec_model_name = infer_codex_exec_model_name(self.model_name)
         command.extend(["-m", exec_model_name])
         if self.working_dir:
-            command.extend(["-C", self.working_dir, "--skip-git-repo-check"])
-        command.extend(
-            [
-                "-s",
-                self.sandbox_mode,
-                "--color",
-                "never",
-                "--output-schema",
-                schema_path,
-                "-o",
-                output_path,
-                "-",
-            ]
-        )
+            command.append("--skip-git-repo-check")
+        if not resume_session_id:
+            command.extend(
+                [
+                    "-s",
+                    self.sandbox_mode,
+                    "--output-schema",
+                    schema_path,
+                ]
+            )
+        command.extend(["--color", "never", "-o", output_path, "-"])
         return command
 
     def _run_codex_exec(
@@ -999,6 +1013,7 @@ class ChatCodexCLI(BaseChatModel):
         tools: Sequence[Dict[str, Any]],
         tool_choice: Optional[str],
         parallel_tool_calls: Optional[bool],
+        resume_session_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """执行 `codex exec` 并返回结构化输出与会话元数据。"""
         if not is_codex_cli_available(self.codex_command):
@@ -1014,6 +1029,7 @@ class ChatCodexCLI(BaseChatModel):
             schema_path=schema_path,
             output_path=output_path,
             json_output=True,
+            resume_session_id=resume_session_id,
         )
 
         logger.info(
@@ -1047,6 +1063,7 @@ class ChatCodexCLI(BaseChatModel):
             stderr_text=result.stderr or "",
             schema_path=schema_path,
             output_path=output_path,
+            resume_session_id=resume_session_id,
         )
 
     async def _arun_codex_exec(
@@ -1056,6 +1073,7 @@ class ChatCodexCLI(BaseChatModel):
         tools: Sequence[Dict[str, Any]],
         tool_choice: Optional[str],
         parallel_tool_calls: Optional[bool],
+        resume_session_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """异步执行 `codex exec` 并返回结构化输出与会话元数据。"""
         if not is_codex_cli_available(self.codex_command):
@@ -1071,6 +1089,7 @@ class ChatCodexCLI(BaseChatModel):
             schema_path=schema_path,
             output_path=output_path,
             json_output=True,
+            resume_session_id=resume_session_id,
         )
 
         logger.info(
@@ -1106,6 +1125,7 @@ class ChatCodexCLI(BaseChatModel):
             stderr_text=stderr_bytes.decode("utf-8", errors="replace"),
             schema_path=schema_path,
             output_path=output_path,
+            resume_session_id=resume_session_id,
         )
 
     def _stream_codex_exec(
@@ -1117,6 +1137,7 @@ class ChatCodexCLI(BaseChatModel):
         parallel_tool_calls: Optional[bool],
         stream_state: Dict[str, Any],
         run_manager: Optional[CallbackManagerForLLMRun],
+        resume_session_id: Optional[str] = None,
     ) -> Iterator[ChatGenerationChunk]:
         """执行同步流式 Codex 调用，并逐条产出 LangChain chunks。"""
         if not is_codex_cli_available(self.codex_command):
@@ -1132,6 +1153,7 @@ class ChatCodexCLI(BaseChatModel):
             schema_path=schema_path,
             output_path=output_path,
             json_output=True,
+            resume_session_id=resume_session_id,
         )
         stdout_lines: List[str] = []
 
@@ -1169,6 +1191,7 @@ class ChatCodexCLI(BaseChatModel):
                 stderr_text=stderr_text,
                 schema_path=schema_path,
                 output_path=output_path,
+                resume_session_id=resume_session_id,
             )
             stream_state["raw_response"] = execution_result["raw_output"]
             stream_state["execution_metadata"] = execution_result["execution_metadata"]
@@ -1191,6 +1214,7 @@ class ChatCodexCLI(BaseChatModel):
         parallel_tool_calls: Optional[bool],
         stream_state: Dict[str, Any],
         run_manager: Optional[AsyncCallbackManagerForLLMRun],
+        resume_session_id: Optional[str] = None,
     ) -> AsyncIterator[ChatGenerationChunk]:
         """执行异步流式 Codex 调用，并逐条产出 LangChain chunks。"""
         if not is_codex_cli_available(self.codex_command):
@@ -1206,6 +1230,7 @@ class ChatCodexCLI(BaseChatModel):
             schema_path=schema_path,
             output_path=output_path,
             json_output=True,
+            resume_session_id=resume_session_id,
         )
         stdout_lines: List[str] = []
 
@@ -1244,6 +1269,7 @@ class ChatCodexCLI(BaseChatModel):
                 stderr_text=stderr_bytes.decode("utf-8", errors="replace"),
                 schema_path=schema_path,
                 output_path=output_path,
+                resume_session_id=resume_session_id,
             )
             stream_state["raw_response"] = execution_result["raw_output"]
             stream_state["execution_metadata"] = execution_result["execution_metadata"]
@@ -1559,6 +1585,7 @@ class ChatCodexCLI(BaseChatModel):
         stderr_text: str,
         schema_path: str,
         output_path: str,
+        resume_session_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """读取最终输出、清理临时文件，并统一处理失败场景。"""
         try:
@@ -1570,6 +1597,8 @@ class ChatCodexCLI(BaseChatModel):
             self._cleanup_temp_files(schema_path, output_path)
 
         execution_metadata = self._extract_execution_metadata(stdout_text)
+        if resume_session_id and not execution_metadata.get("thread_id"):
+            execution_metadata["thread_id"] = resume_session_id
 
         if returncode != 0:
             logger.error(
@@ -1585,10 +1614,40 @@ class ChatCodexCLI(BaseChatModel):
         if not raw_output:
             raise RuntimeError("Codex CLI 未返回可解析的输出内容。")
 
+        if resume_session_id:
+            raw_output = self._normalize_resume_raw_output(raw_output)
+
         return {
             "raw_output": raw_output,
             "execution_metadata": execution_metadata,
         }
+
+    def _normalize_resume_raw_output(self, raw_output: str) -> str:
+        """将 resume 路径的最后一条消息规整回现有 JSON 响应结构。"""
+        try:
+            payload = self._load_json_payload(raw_output)
+        except ValueError:
+            return json.dumps(
+                {
+                    "content": raw_output,
+                    "tool_calls": [],
+                },
+                ensure_ascii=False,
+            )
+
+        if (
+            isinstance(payload.get("content"), str)
+            and isinstance(payload.get("tool_calls"), list)
+        ):
+            return raw_output
+
+        return json.dumps(
+            {
+                "content": raw_output,
+                "tool_calls": [],
+            },
+            ensure_ascii=False,
+        )
 
     def _extract_execution_metadata(self, stdout_text: str) -> Dict[str, Any]:
         """从 Codex CLI `--json` 事件流中提取 session 和 token 使用量。"""

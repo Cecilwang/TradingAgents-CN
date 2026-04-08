@@ -1,9 +1,9 @@
-from langchain_core.messages import AIMessage
 import time
-import json
 
 # 导入统一日志系统
 from tradingagents.utils.logging_init import get_logger
+from tradingagents.agents.utils.codex_session import invoke_role_with_codex_session
+
 logger = get_logger("default")
 
 
@@ -24,7 +24,7 @@ def create_safe_debator(llm):
         trader_decision = state["trader_investment_plan"]
 
         # 📊 记录输入数据长度
-        logger.info(f"📊 [Safe Analyst] 输入数据长度统计:")
+        logger.info("📊 [Safe Analyst] 输入数据长度统计:")
         logger.info(f"  - market_report: {len(market_research_report):,} 字符")
         logger.info(f"  - sentiment_report: {len(sentiment_report):,} 字符")
         logger.info(f"  - news_report: {len(news_report):,} 字符")
@@ -37,7 +37,8 @@ def create_safe_debator(llm):
                        len(current_risky_response) + len(current_neutral_response))
         logger.info(f"  - 总Prompt长度: {total_length:,} 字符 (~{total_length//4:,} tokens)")
 
-        prompt = f"""作为安全/保守风险分析师，您的主要目标是保护资产、最小化波动性，并确保稳定、可靠的增长。您优先考虑稳定性、安全性和风险缓解，仔细评估潜在损失、经济衰退和市场波动。在评估交易员的决策或计划时，请批判性地审查高风险要素，指出决策可能使公司面临不当风险的地方，以及更谨慎的替代方案如何能够确保长期收益。以下是交易员的决策：
+        def build_full_prompt() -> str:
+            return f"""作为安全/保守风险分析师，您的主要目标是保护资产、最小化波动性，并确保稳定、可靠的增长。您优先考虑稳定性、安全性和风险缓解，仔细评估潜在损失、经济衰退和市场波动。在评估交易员的决策或计划时，请批判性地审查高风险要素，指出决策可能使公司面临不当风险的地方，以及更谨慎的替代方案如何能够确保长期收益。以下是交易员的决策：
 
 {trader_decision}
 
@@ -51,10 +52,29 @@ def create_safe_debator(llm):
 
 通过质疑他们的乐观态度并强调他们可能忽视的潜在下行风险来参与讨论。解决他们的每个反驳点，展示为什么保守立场最终是公司资产最安全的道路。专注于辩论和批评他们的论点，证明低风险策略相对于他们方法的优势。请用中文以对话方式输出，就像您在说话一样，不使用任何特殊格式。"""
 
-        logger.info(f"⏱️ [Safe Analyst] 开始调用LLM...")
+        continuation_prompt = f"""继续以保守风险分析师身份推进当前讨论。
+
+你在当前会话里已经掌握完整研究报告、交易员方案和你此前的保守立场。
+这轮只需要回应新增的对立观点，不要重复完整背景。
+
+激进分析师最新论点：
+{current_risky_response}
+
+中性分析师最新论点：
+{current_neutral_response}
+
+请直接继续输出中文辩论内容，保持对话风格，不使用特殊格式。"""
+
+        logger.info("⏱️ [Safe Analyst] 开始调用LLM...")
         llm_start_time = time.time()
 
-        response = llm.invoke(prompt)
+        response, updated_codex_role_sessions = invoke_role_with_codex_session(
+            llm=llm,
+            state=state,
+            role_name="Safe Analyst",
+            full_prompt=build_full_prompt,
+            continuation_prompt=continuation_prompt,
+        )
 
         llm_elapsed = time.time() - llm_start_time
         logger.info(f"⏱️ [Safe Analyst] LLM调用完成，耗时: {llm_elapsed:.2f}秒")
@@ -80,6 +100,9 @@ def create_safe_debator(llm):
             "count": new_count,
         }
 
-        return {"risk_debate_state": new_risk_debate_state}
+        return {
+            "risk_debate_state": new_risk_debate_state,
+            "codex_role_sessions": updated_codex_role_sessions,
+        }
 
     return safe_node

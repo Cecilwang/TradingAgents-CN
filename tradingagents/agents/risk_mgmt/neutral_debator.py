@@ -1,8 +1,9 @@
 import time
-import json
 
 # 导入统一日志系统
 from tradingagents.utils.logging_init import get_logger
+from tradingagents.agents.utils.codex_session import invoke_role_with_codex_session
+
 logger = get_logger("default")
 
 
@@ -23,7 +24,7 @@ def create_neutral_debator(llm):
         trader_decision = state["trader_investment_plan"]
 
         # 📊 记录所有输入数据的长度，用于性能分析
-        logger.info(f"📊 [Neutral Analyst] 输入数据长度统计:")
+        logger.info("📊 [Neutral Analyst] 输入数据长度统计:")
         logger.info(f"  - market_report: {len(market_research_report):,} 字符 (~{len(market_research_report)//4:,} tokens)")
         logger.info(f"  - sentiment_report: {len(sentiment_report):,} 字符 (~{len(sentiment_report)//4:,} tokens)")
         logger.info(f"  - news_report: {len(news_report):,} 字符 (~{len(news_report)//4:,} tokens)")
@@ -40,7 +41,8 @@ def create_neutral_debator(llm):
                               len(current_risky_response) + len(current_safe_response))
         logger.info(f"  - 🚨 总Prompt长度: {total_prompt_length:,} 字符 (~{total_prompt_length//4:,} tokens)")
 
-        prompt = f"""作为中性风险分析师，您的角色是提供平衡的视角，权衡交易员决策或计划的潜在收益和风险。您优先考虑全面的方法，评估上行和下行风险，同时考虑更广泛的市场趋势、潜在的经济变化和多元化策略。以下是交易员的决策：
+        def build_full_prompt() -> str:
+            return f"""作为中性风险分析师，您的角色是提供平衡的视角，权衡交易员决策或计划的潜在收益和风险。您优先考虑全面的方法，评估上行和下行风险，同时考虑更广泛的市场趋势、潜在的经济变化和多元化策略。以下是交易员的决策：
 
 {trader_decision}
 
@@ -54,10 +56,29 @@ def create_neutral_debator(llm):
 
 通过批判性地分析双方来积极参与，解决激进和保守论点中的弱点，倡导更平衡的方法。挑战他们的每个观点，说明为什么适度风险策略可能提供两全其美的效果，既提供增长潜力又防范极端波动。专注于辩论而不是简单地呈现数据，旨在表明平衡的观点可以带来最可靠的结果。请用中文以对话方式输出，就像您在说话一样，不使用任何特殊格式。"""
 
-        logger.info(f"⏱️ [Neutral Analyst] 开始调用LLM...")
+        continuation_prompt = f"""继续以中性风险分析师身份推进当前讨论。
+
+你在当前会话里已经掌握完整研究报告、交易员方案和你此前的平衡立场。
+这轮只需要回应新增的对立观点，不要重复完整背景。
+
+激进分析师最新论点：
+{current_risky_response}
+
+保守分析师最新论点：
+{current_safe_response}
+
+请直接继续输出中文辩论内容，保持对话风格，不使用特殊格式。"""
+
+        logger.info("⏱️ [Neutral Analyst] 开始调用LLM...")
         llm_start_time = time.time()
 
-        response = llm.invoke(prompt)
+        response, updated_codex_role_sessions = invoke_role_with_codex_session(
+            llm=llm,
+            state=state,
+            role_name="Neutral Analyst",
+            full_prompt=build_full_prompt,
+            continuation_prompt=continuation_prompt,
+        )
 
         llm_elapsed = time.time() - llm_start_time
         logger.info(f"⏱️ [Neutral Analyst] LLM调用完成，耗时: {llm_elapsed:.2f}秒")
@@ -82,6 +103,9 @@ def create_neutral_debator(llm):
             "count": new_count,
         }
 
-        return {"risk_debate_state": new_risk_debate_state}
+        return {
+            "risk_debate_state": new_risk_debate_state,
+            "codex_role_sessions": updated_codex_role_sessions,
+        }
 
     return neutral_node
