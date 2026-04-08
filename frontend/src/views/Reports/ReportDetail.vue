@@ -232,7 +232,7 @@
           >
             <div class="module-content">
               <div v-if="typeof content === 'string'" class="markdown-content">
-                <div v-html="renderMarkdown(content)"></div>
+                <div v-html="renderMarkdown(getModuleDisplayContent(moduleName, content))"></div>
               </div>
               <div v-else class="json-content">
                 <pre>{{ JSON.stringify(content, null, 2) }}</pre>
@@ -303,11 +303,6 @@ const loading = ref(true)
 const report = ref(null)
 const activeModule = ref('')
 const llmConfigs = ref<LLMConfig[]>([]) // 存储所有模型配置
-
-const reportSummary = computed(() => {
-  if (!report.value) return ''
-  return report.value.summary_full || report.value.summary || ''
-})
 
 // 获取模型配置列表
 const fetchLLMConfigs = async () => {
@@ -843,6 +838,58 @@ const getModuleDisplayName = (moduleName: string) => {
   // 未匹配到时，做一个友好的回退：下划线转空格
   return nameMap[moduleName] || moduleName.replace(/_/g, ' ')
 }
+
+const formatStructuredModuleContent = (value: unknown): string => {
+  if (value == null) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+
+  if (Array.isArray(value)) {
+    const items = value.map((item) => formatStructuredModuleContent(item)).filter(Boolean)
+    return items.map((item) => `- ${item}`).join('\n')
+  }
+
+  if (typeof value === 'object') {
+    const lines: string[] = []
+    for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+      const text = formatStructuredModuleContent(nestedValue)
+      if (!text) continue
+      if (text.includes('\n')) {
+        lines.push(`**${key}**`)
+        lines.push(text)
+      } else {
+        lines.push(`**${key}**: ${text}`)
+      }
+    }
+    return lines.join('\n\n').trim()
+  }
+
+  return String(value).trim()
+}
+
+const getModuleDisplayContent = (_moduleName: string, content: string) => {
+  const trimmed = content.trim()
+  if (!trimmed || !['{', '['].includes(trimmed[0])) {
+    return content
+  }
+
+  try {
+    return formatStructuredModuleContent(JSON.parse(trimmed)) || content
+  } catch {
+    return content
+  }
+}
+
+const reportSummary = computed(() => {
+  if (!report.value) return ''
+
+  const finalTradeDecision = report.value.reports?.final_trade_decision
+  if (typeof finalTradeDecision === 'string' && finalTradeDecision.trim()) {
+    return getModuleDisplayContent('final_trade_decision', finalTradeDecision)
+  }
+
+  return report.value.summary || ''
+})
 
 const renderMarkdown = (content: string) => {
   if (!content) return ''

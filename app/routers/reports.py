@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from .auth_db import get_current_user
 from ..core.database import get_mongo_db
 from ..utils.timezone import to_config_tz
-from ..utils.report_helpers import extract_report_action, extract_report_summary_markdown
+from ..utils.report_helpers import extract_report_action
 import logging
 
 logger = logging.getLogger("webapi")
@@ -304,7 +304,6 @@ async def get_report_detail(
                 "key_points": r.get("key_points", []),
                 "execution_time": r.get("execution_time", 0),
                 "tokens_used": r.get("tokens_used", 0),
-                "summary_full": extract_report_summary_markdown(r),
             }
         else:
             # 转换为详细格式（analysis_reports 命中）
@@ -344,7 +343,6 @@ async def get_report_detail(
                 "key_points": doc.get("key_points", []),
                 "execution_time": doc.get("execution_time", 0),
                 "tokens_used": doc.get("tokens_used", 0),
-                "summary_full": extract_report_summary_markdown(doc),
             }
 
         return {

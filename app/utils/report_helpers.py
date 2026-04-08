@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any, Dict
 
 
@@ -89,22 +88,4 @@ def extract_report_action(report: Dict[str, Any]) -> str:
             if action:
                 return action
 
-    return ""
-
-
-def extract_report_summary_markdown(report: Dict[str, Any]) -> str:
-    """为详情页提取完整可展示的执行摘要。"""
-    if not isinstance(report, dict):
-        return ""
-
-    reports = report.get("reports") or {}
-    investment_plan = reports.get("investment_plan") if isinstance(reports, dict) else None
-    if isinstance(investment_plan, str) and investment_plan.strip():
-        cleaned = investment_plan.strip()
-        cleaned = re.sub(r"^\s*#\s+.*?\n+", "", cleaned, count=1)
-        return cleaned.strip()
-
-    summary = report.get("summary")
-    if isinstance(summary, str):
-        return summary.strip()
     return ""
