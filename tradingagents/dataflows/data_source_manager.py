@@ -1672,6 +1672,45 @@ class DataSourceManager:
 
         return normalized_symbol, market
 
+    def _get_tushare_stock_info(self, symbol: str) -> Dict:
+        """使用 Tushare 获取股票基本信息。"""
+        try:
+            provider = self._get_tushare_adapter()
+            if not provider or not getattr(provider, "api", None):
+                logger.warning(f"⚠️ [Tushare股票信息] 提供器不可用: {symbol}")
+                return {'symbol': symbol, 'name': f'股票{symbol}', 'source': 'tushare'}
+
+            normalized_symbol, market = self._split_cn_stock_symbol(symbol)
+            if normalized_symbol.isdigit() and len(normalized_symbol) == 6:
+                ts_suffix = (market or ('sh' if normalized_symbol.startswith(('60', '68', '90')) else 'sz')).upper()
+                ts_code = f"{normalized_symbol}.{ts_suffix}"
+            else:
+                ts_code = symbol
+
+            stock_info = provider.api.stock_basic(
+                ts_code=ts_code,
+                fields='ts_code,symbol,name,area,industry,market,exchange,list_date'
+            )
+
+            if stock_info is None or stock_info.empty:
+                logger.warning(f"⚠️ [Tushare股票信息] 返回空数据: {symbol}")
+                return {'symbol': symbol, 'name': f'股票{symbol}', 'source': 'tushare'}
+
+            row = stock_info.iloc[0]
+            return {
+                'symbol': symbol,
+                'name': row.get('name', f'股票{symbol}'),
+                'area': row.get('area', '未知'),
+                'industry': row.get('industry', '未知'),
+                'market': row.get('market', '未知'),
+                'exchange': row.get('exchange', '未知'),
+                'list_date': row.get('list_date', '未知'),
+                'source': 'tushare',
+            }
+        except Exception as e:
+            logger.error(f"❌ [股票信息] Tushare获取失败: {symbol}, 错误: {e}")
+            return {'symbol': symbol, 'name': f'股票{symbol}', 'source': 'tushare', 'error': str(e)}
+
     def _get_akshare_stock_info(self, symbol: str) -> Dict:
         """使用AKShare获取股票基本信息
 
@@ -1682,15 +1721,11 @@ class DataSourceManager:
         try:
             import akshare as ak
 
-            normalized_symbol, market = self._split_cn_stock_symbol(symbol)
+            normalized_symbol, _market = self._split_cn_stock_symbol(symbol)
 
             # 🔥 转换为 AKShare 格式的股票代码
-            # AKShare 的 stock_individual_info_em 需要使用 "sz000001" 或 "sh600000" 格式
-            if market in {'sh', 'sz', 'bj'} and normalized_symbol.isdigit():
-                akshare_symbol = f"{market}{normalized_symbol}"
-            else:
-                # 其他情况，直接使用原始代码
-                akshare_symbol = normalized_symbol
+            # stock_individual_info_em 使用纯 6 位代码更稳定，项目现有测试也采用该格式
+            akshare_symbol = normalized_symbol
 
             logger.debug(f"📊 [AKShare股票信息] 原始代码: {symbol}, AKShare格式: {akshare_symbol}")
 

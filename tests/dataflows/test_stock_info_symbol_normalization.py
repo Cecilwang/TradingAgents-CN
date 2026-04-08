@@ -21,7 +21,7 @@ def test_get_akshare_stock_info_normalizes_ts_code(monkeypatch):
 
     result = manager._get_akshare_stock_info("600989.SH")
 
-    assert called["symbol"] == "sh600989"
+    assert called["symbol"] == "600989"
     assert result["name"] == "九丰能源"
     assert result["source"] == "akshare"
 
@@ -80,3 +80,38 @@ def test_split_cn_stock_symbol_supports_multiple_input_formats():
     assert manager._split_cn_stock_symbol("600989.SH") == ("600989", "sh")
     assert manager._split_cn_stock_symbol("sh.600989") == ("600989", "sh")
     assert manager._split_cn_stock_symbol("sz000001") == ("000001", "sz")
+
+
+def test_get_tushare_stock_info_normalizes_ts_code(monkeypatch):
+    manager = DataSourceManager.__new__(DataSourceManager)
+    called = {}
+
+    class FakeApi:
+        @staticmethod
+        def stock_basic(ts_code, fields):
+            called["ts_code"] = ts_code
+            called["fields"] = fields
+            return pd.DataFrame([
+                {
+                    "ts_code": ts_code,
+                    "symbol": "600989",
+                    "name": "九丰能源",
+                    "area": "江西",
+                    "industry": "燃气",
+                    "market": "主板",
+                    "exchange": "SSE",
+                    "list_date": "20210525",
+                }
+            ])
+
+    class FakeProvider:
+        api = FakeApi()
+
+    monkeypatch.setattr(manager, "_get_tushare_adapter", lambda: FakeProvider())
+
+    result = manager._get_tushare_stock_info("600989.SH")
+
+    assert called["ts_code"] == "600989.SH"
+    assert result["name"] == "九丰能源"
+    assert result["exchange"] == "SSE"
+    assert result["source"] == "tushare"
