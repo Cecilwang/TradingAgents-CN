@@ -64,23 +64,6 @@ def _infer_market_type_from_symbol(stock_code: str) -> str:
     return market_type_map.get(market, "A股")
 
 
-def _resolve_market_type_for_symbol(stock_code: str, requested_market_type: Optional[str]) -> str:
-    """优先信任代码本身的市场归属，避免混合批量被默认值误导成A股。"""
-    inferred_market_type = _infer_market_type_from_symbol(stock_code)
-    normalized_requested_market_type = str(requested_market_type or "").strip()
-
-    if (
-        normalized_requested_market_type
-        and normalized_requested_market_type != inferred_market_type
-    ):
-        logger.warning(
-            f"⚠️ 股票 {stock_code} 的请求市场为 {normalized_requested_market_type}，"
-            f"但代码推断为 {inferred_market_type}，将使用推断结果"
-        )
-
-    return inferred_market_type
-
-
 def _normalize_hk_task_symbol(stock_code: str) -> str:
     """任务中心统一使用 5 位数字.HK 作为港股查询键。"""
     normalized_code = str(stock_code or "").strip().upper().split(".")[0].lstrip("0").zfill(5)
@@ -920,10 +903,7 @@ class SimpleAnalysisService:
             stock_code = request.get_symbol()
             if not stock_code:
                 raise ValueError("股票代码不能为空")
-            effective_market_type = _resolve_market_type_for_symbol(
-                stock_code,
-                request.parameters.market_type if request.parameters else None,
-            )
+            effective_market_type = _infer_market_type_from_symbol(stock_code)
             task_parameters = request.parameters.model_dump() if request.parameters else {}
             task_parameters["market_type"] = effective_market_type
 
@@ -1021,10 +1001,7 @@ class SimpleAnalysisService:
             from datetime import datetime
 
             # 获取市场类型
-            market_type = _resolve_market_type_for_symbol(
-                stock_code,
-                request.parameters.market_type if request.parameters else None,
-            )
+            market_type = _infer_market_type_from_symbol(stock_code)
 
             # 获取分析日期并转换为字符串格式
             analysis_date = request.parameters.analysis_date if request.parameters else None
@@ -1419,10 +1396,7 @@ class SimpleAnalysisService:
 
             # 获取市场类型
             stock_code = request.get_symbol()
-            market_type = _resolve_market_type_for_symbol(
-                stock_code,
-                request.parameters.market_type if request.parameters else None,
-            )
+            market_type = _infer_market_type_from_symbol(stock_code)
             logger.info(f"📊 [市场类型] 使用市场类型: {market_type}")
 
             # 创建分析配置（支持混合模式）
