@@ -605,7 +605,7 @@ export const validateLLMConfig = (config: Partial<LLMConfig>): string[] => {
     errors.push('温度参数必须在0-2之间')
   }
   if (isCodex) {
-    const allowedReasoningEfforts = new Set(['low', 'medium', 'high', 'xhigh'])
+    const allowedReasoningEfforts = new Set(['none', 'low', 'medium', 'high', 'xhigh'])
     const allowedApprovalPolicies = new Set(['untrusted', 'on-request', 'never'])
     const allowedSandboxModes = new Set(['read-only', 'workspace-write', 'danger-full-access'])
 
