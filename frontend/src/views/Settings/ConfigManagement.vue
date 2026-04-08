@@ -1822,7 +1822,13 @@ const showAddLLMDialog = () => {
 }
 
 const editLLMConfig = (config: LLMConfig) => {
-  currentLLMConfig.value = config
+  currentLLMConfig.value = {
+    ...config,
+    suitable_roles: Array.isArray(config.suitable_roles) ? [...config.suitable_roles] : [],
+    features: Array.isArray(config.features) ? [...config.features] : [],
+    recommended_depths: Array.isArray(config.recommended_depths) ? [...config.recommended_depths] : [],
+    performance_metrics: config.performance_metrics ? { ...config.performance_metrics } : undefined
+  }
   isEditingLLM.value = true
   llmDialogVisible.value = true
 }

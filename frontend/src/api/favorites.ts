@@ -15,6 +15,7 @@ export interface FavoriteItem {
   current_price?: number | null
   change_percent?: number | null
   volume?: number | null
+  latest_report_action?: string | null
 }
 
 export interface AddFavoriteReq {
@@ -79,4 +80,3 @@ export const favoritesApi = {
       message: string
     }>('/api/favorites/sync-realtime', { data_source })
 }
-

@@ -9,6 +9,7 @@ from bson import ObjectId
 
 from app.core.database import get_mongo_db
 from app.services.quotes_service import get_quotes_service
+from app.utils.report_helpers import extract_report_action
 
 
 class FavoritesService:
@@ -52,6 +53,7 @@ class FavoritesService:
             "current_price": None,
             "change_percent": None,
             "volume": None,
+            "latest_report_action": None,
         }
 
     def _infer_market_from_code(self, stock_code: Optional[str]) -> str:
@@ -133,6 +135,72 @@ class FavoritesService:
                 "code": code,
             })
         return targets
+
+    def _build_task_user_candidates(self, user_id: str) -> List[Any]:
+        """兼容 analysis_tasks 中的字符串/ObjectId 用户ID。"""
+        candidates: List[Any] = [user_id]
+        try:
+            candidates.append(ObjectId(user_id))
+        except Exception:
+            pass
+        return candidates
+
+    def _build_task_symbol_regex(self, code: str, market: str) -> str:
+        """为最近分析报告查询构造股票代码匹配规则。"""
+        escaped_code = re.escape(code)
+        if market == "CN":
+            return rf"^{escaped_code}(?:\.(?:SH|SZ|BJ))?$"
+        if market == "HK":
+            digits = re.escape(code.lstrip("0") or "0")
+            return rf"^0*{digits}(?:\.HK)?$"
+        return rf"^{escaped_code}(?:\.US)?$"
+
+    async def _enrich_latest_report_actions(
+        self,
+        db,
+        user_id: str,
+        targets: List[Dict[str, Any]],
+    ) -> None:
+        """补充当前用户最近一份分析报告的执行建议。"""
+        user_candidates = self._build_task_user_candidates(user_id)
+        projection = {
+            "_id": 0,
+            "result.recommendation": 1,
+            "result.decision": 1,
+            "result.reports": 1,
+        }
+
+        for target in targets:
+            code = target.get("code")
+            market = target.get("market")
+            if not code or not market:
+                continue
+
+            symbol_regex = self._build_task_symbol_regex(code, market)
+            query = {
+                "$and": [
+                    {"status": "completed"},
+                    {"result": {"$exists": True, "$ne": None}},
+                    {"$or": [
+                        {"user_id": {"$in": user_candidates}},
+                        {"user": {"$in": user_candidates}},
+                    ]},
+                    {"$or": [
+                        {"symbol": {"$regex": symbol_regex, "$options": "i"}},
+                        {"stock_code": {"$regex": symbol_regex, "$options": "i"}},
+                        {"result.stock_symbol": {"$regex": symbol_regex, "$options": "i"}},
+                        {"result.stock_code": {"$regex": symbol_regex, "$options": "i"}},
+                    ]},
+                ]
+            }
+
+            doc = await db.analysis_tasks.find_one(
+                query,
+                projection,
+                sort=[("completed_at", -1), ("created_at", -1)],
+            )
+            result = (doc or {}).get("result") or {}
+            target["item"]["latest_report_action"] = extract_report_action(result) or None
 
     async def _load_quotes_from_mongo(
         self,
@@ -313,6 +381,8 @@ class FavoritesService:
                 foreign_targets,
                 allow_online_quote_fallback=allow_online_quote_fallback,
             )
+
+        await self._enrich_latest_report_actions(db, user_id, targets)
 
         return items
 

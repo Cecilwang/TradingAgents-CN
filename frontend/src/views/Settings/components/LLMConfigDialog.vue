@@ -476,6 +476,39 @@ const codexCapabilityDefaults: Partial<typeof defaultFormData> = {
 
 const formData = ref({ ...defaultFormData })
 
+const clonePerformanceMetrics = (metrics?: typeof defaultFormData.performance_metrics | null) => {
+  if (!metrics) {
+    return { ...defaultFormData.performance_metrics }
+  }
+  return { ...metrics }
+}
+
+const buildFormData = (config?: Partial<LLMConfig> | null) => {
+  if (!config) {
+    return {
+      ...defaultFormData,
+      suitable_roles: [...defaultFormData.suitable_roles],
+      features: [...defaultFormData.features],
+      recommended_depths: [...defaultFormData.recommended_depths],
+      performance_metrics: clonePerformanceMetrics(defaultFormData.performance_metrics)
+    }
+  }
+
+  return normalizeCodexFormData({
+    ...defaultFormData,
+    ...config,
+    input_price_per_1k: config.input_price_per_1k ?? defaultFormData.input_price_per_1k,
+    output_price_per_1k: config.output_price_per_1k ?? defaultFormData.output_price_per_1k,
+    currency: config.currency || defaultFormData.currency,
+    model_display_name: config.model_display_name || '',
+    capability_level: config.capability_level ?? defaultFormData.capability_level,
+    suitable_roles: Array.isArray(config.suitable_roles) ? [...config.suitable_roles] : [...defaultFormData.suitable_roles],
+    features: Array.isArray(config.features) ? [...config.features] : [...defaultFormData.features],
+    recommended_depths: Array.isArray(config.recommended_depths) ? [...config.recommended_depths] : [...defaultFormData.recommended_depths],
+    performance_metrics: clonePerformanceMetrics(config.performance_metrics)
+  }) as typeof defaultFormData
+}
+
 // 用于跟踪当前选择的模型（用于下拉列表）
 const selectedModelKey = ref<string>('')
 
@@ -655,24 +688,7 @@ watch(
   () => props.config,
   (config) => {
     if (config) {
-      // 编辑模式：先使用默认值，再用配置覆盖
-      // 注意：对于数字类型的字段，即使是 0 也应该保留
-      formData.value = normalizeCodexFormData({
-        ...defaultFormData,
-        ...config,
-        // 确保价格字段正确加载，即使是 0 也要保留
-        input_price_per_1k: config.input_price_per_1k ?? defaultFormData.input_price_per_1k,
-        output_price_per_1k: config.output_price_per_1k ?? defaultFormData.output_price_per_1k,
-        currency: config.currency || defaultFormData.currency,
-        // 确保显示名称正确加载
-        model_display_name: config.model_display_name || '',
-        // 🆕 确保模型能力字段正确加载
-        capability_level: config.capability_level ?? defaultFormData.capability_level,
-        suitable_roles: config.suitable_roles || defaultFormData.suitable_roles,
-        features: config.features || defaultFormData.features,
-        recommended_depths: config.recommended_depths || defaultFormData.recommended_depths,
-        performance_metrics: config.performance_metrics || defaultFormData.performance_metrics
-      }) as typeof defaultFormData
+      formData.value = buildFormData(config)
       modelOptions.value = getModelOptions(config.provider)
 
       // 如果有 model_name，尝试在下拉列表中选中它
@@ -682,7 +698,7 @@ watch(
 
       console.log('📝 编辑模式加载配置:', formData.value)
     } else {
-      formData.value = { ...defaultFormData }
+      formData.value = buildFormData()
       modelOptions.value = getModelOptions('dashscope')
       selectedModelKey.value = ''
     }
@@ -702,23 +718,7 @@ watch(
       ])
 
       if (props.config) {
-        // 编辑模式：先使用默认值，再用配置覆盖
-        formData.value = normalizeCodexFormData({
-          ...defaultFormData,
-          ...props.config,
-          // 确保价格字段正确加载，即使是 0 也要保留
-          input_price_per_1k: props.config.input_price_per_1k ?? defaultFormData.input_price_per_1k,
-          output_price_per_1k: props.config.output_price_per_1k ?? defaultFormData.output_price_per_1k,
-          currency: props.config.currency || defaultFormData.currency,
-          // 确保显示名称正确加载
-          model_display_name: props.config.model_display_name || '',
-          // 🆕 确保模型能力字段正确加载
-          capability_level: props.config.capability_level ?? defaultFormData.capability_level,
-          suitable_roles: props.config.suitable_roles || defaultFormData.suitable_roles,
-          features: props.config.features || defaultFormData.features,
-          recommended_depths: props.config.recommended_depths || defaultFormData.recommended_depths,
-          performance_metrics: props.config.performance_metrics || defaultFormData.performance_metrics
-        }) as typeof defaultFormData
+        formData.value = buildFormData(props.config)
         modelOptions.value = getModelOptions(props.config.provider)
 
         // 如果有 model_name，尝试在下拉列表中选中它
@@ -729,7 +729,7 @@ watch(
         console.log('📝 对话框打开，加载配置:', formData.value)
       } else {
         // 新增模式：使用默认值
-        formData.value = { ...defaultFormData }
+        formData.value = buildFormData()
         // 如果有供应商，加载其模型列表
         if (formData.value.provider) {
           modelOptions.value = getModelOptions(formData.value.provider)
@@ -770,7 +770,13 @@ const handleSubmit = async () => {
     loading.value = true
 
     // 准备提交数据，移除api_key字段（由后端从厂家配置获取）
-    const submitData = normalizeCodexFormData({ ...formData.value })
+    const submitData = normalizeCodexFormData({
+      ...formData.value,
+      suitable_roles: [...formData.value.suitable_roles],
+      features: [...formData.value.features],
+      recommended_depths: [...formData.value.recommended_depths],
+      performance_metrics: clonePerformanceMetrics(formData.value.performance_metrics)
+    })
     // 使用类型安全的方式移除api_key字段（如果存在的话）
     if ('api_key' in submitData) {
       delete (submitData as any).api_key  // 不发送api_key，让后端从厂家配置获取

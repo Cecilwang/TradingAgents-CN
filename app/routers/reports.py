@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from .auth_db import get_current_user
 from ..core.database import get_mongo_db
 from ..utils.timezone import to_config_tz
+from ..utils.report_helpers import extract_report_action, extract_report_summary_markdown
 import logging
 
 logger = logging.getLogger("webapi")
@@ -212,6 +213,8 @@ async def get_reports_list(
                 "analysts": doc.get("analysts", []),
                 "research_depth": doc.get("research_depth", 1),
                 "summary": doc.get("summary", ""),
+                "recommendation": doc.get("recommendation", ""),
+                "execution_action": extract_report_action(doc),
                 "file_size": len(str(doc.get("reports", {}))),  # 估算大小
                 "source": doc.get("source", "unknown"),
                 "task_id": doc.get("task_id", "")
@@ -295,11 +298,13 @@ async def get_report_detail(
                 "source": "analysis_tasks",
                 "task_id": tasks_doc.get("task_id", report_id),
                 "recommendation": r.get("recommendation", ""),
+                "execution_action": extract_report_action(r),
                 "confidence_score": r.get("confidence_score", 0.0),
                 "risk_level": r.get("risk_level", "中等"),
                 "key_points": r.get("key_points", []),
                 "execution_time": r.get("execution_time", 0),
-                "tokens_used": r.get("tokens_used", 0)
+                "tokens_used": r.get("tokens_used", 0),
+                "summary_full": extract_report_summary_markdown(r),
             }
         else:
             # 转换为详细格式（analysis_reports 命中）
@@ -333,11 +338,13 @@ async def get_report_detail(
                 "source": doc.get("source", "unknown"),
                 "task_id": doc.get("task_id", ""),
                 "recommendation": doc.get("recommendation", ""),
+                "execution_action": extract_report_action(doc),
                 "confidence_score": doc.get("confidence_score", 0.0),
                 "risk_level": doc.get("risk_level", "中等"),
                 "key_points": doc.get("key_points", []),
                 "execution_time": doc.get("execution_time", 0),
-                "tokens_used": doc.get("tokens_used", 0)
+                "tokens_used": doc.get("tokens_used", 0),
+                "summary_full": extract_report_summary_markdown(doc),
             }
 
         return {

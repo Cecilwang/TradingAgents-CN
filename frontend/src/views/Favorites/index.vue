@@ -153,6 +153,19 @@
           </template>
         </el-table-column>
 
+        <el-table-column prop="latest_report_action" label="最近报告建议" width="120">
+          <template #default="{ row }">
+            <el-tag
+              v-if="row.latest_report_action"
+              :type="getRecommendationTagType(row.latest_report_action)"
+              effect="light"
+            >
+              {{ row.latest_report_action }}
+            </el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+
         <el-table-column prop="tags" label="标签" width="150">
           <template #default="{ row }">
             <el-tag
@@ -1178,6 +1191,13 @@ const formatPercent = (value: any): string => {
   if (!Number.isFinite(n)) return '-'
   const sign = n > 0 ? '+' : ''
   return `${sign}${n.toFixed(2)}%`
+}
+
+const getRecommendationTagType = (action: string) => {
+  if (action === '买入') return 'success'
+  if (action === '卖出') return 'danger'
+  if (action === '持有') return 'warning'
+  return 'info'
 }
 
 const formatDate = (dateStr: string) => {

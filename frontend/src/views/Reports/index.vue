@@ -110,6 +110,19 @@
           </template>
         </el-table-column>
 
+        <el-table-column prop="execution_action" label="执行建议" width="110">
+          <template #default="{ row }">
+            <el-tag
+              v-if="row.execution_action"
+              :type="getExecutionActionTagType(row.execution_action)"
+              effect="light"
+            >
+              {{ row.execution_action }}
+            </el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+
         <el-table-column prop="model_info" label="分析模型" width="180">
           <template #default="{ row }">
             <el-tag v-if="row.model_info && row.model_info !== 'Unknown'" type="info" size="small">
@@ -447,6 +460,13 @@ const getStatusText = (status: string) => {
     failed: '失败'
   }
   return statusMap[status] || status
+}
+
+const getExecutionActionTagType = (action: string) => {
+  if (action === '买入') return 'success'
+  if (action === '卖出') return 'danger'
+  if (action === '持有') return 'warning'
+  return 'info'
 }
 
 import { formatDateTime } from '@/utils/datetime'

@@ -204,14 +204,14 @@
       </el-card>
 
       <!-- 报告摘要 -->
-      <el-card v-if="report.summary" class="summary-card" shadow="never">
+      <el-card v-if="reportSummary" class="summary-card" shadow="never">
         <template #header>
           <div class="card-header">
             <el-icon><InfoFilled /></el-icon>
             <span>执行摘要</span>
           </div>
         </template>
-        <div class="summary-content markdown-content" v-html="renderMarkdown(report.summary)"></div>
+        <div class="summary-content markdown-content" v-html="renderMarkdown(reportSummary)"></div>
       </el-card>
 
       <!-- 报告模块 -->
@@ -303,6 +303,11 @@ const loading = ref(true)
 const report = ref(null)
 const activeModule = ref('')
 const llmConfigs = ref<LLMConfig[]>([]) // 存储所有模型配置
+
+const reportSummary = computed(() => {
+  if (!report.value) return ''
+  return report.value.summary_full || report.value.summary || ''
+})
 
 // 获取模型配置列表
 const fetchLLMConfigs = async () => {
