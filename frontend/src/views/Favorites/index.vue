@@ -128,12 +128,6 @@
             {{ row.board || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="exchange" label="交易所" width="140">
-          <template #default="{ row }">
-            {{ row.exchange || '-' }}
-          </template>
-        </el-table-column>
-
         <el-table-column prop="current_price" label="当前价格" width="100">
           <template #default="{ row }">
             <span v-if="row.current_price !== null && row.current_price !== undefined">¥{{ formatPrice(row.current_price) }}</span>
@@ -195,6 +189,12 @@
         <el-table-column prop="added_at" label="添加时间" width="120">
           <template #default="{ row }">
             {{ formatDate(row.added_at) }}
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="exchange" label="交易所" width="140">
+          <template #default="{ row }">
+            {{ row.exchange || '-' }}
           </template>
         </el-table-column>
 
