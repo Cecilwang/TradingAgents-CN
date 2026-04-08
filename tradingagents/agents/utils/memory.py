@@ -53,12 +53,15 @@ class ChromaDBManager:
                 logger.error(f"❌ [ChromaDB] 初始化失败: {e}")
                 # 使用最简单的配置作为备用
                 try:
-                    settings = Settings(
-                        allow_reset=True,
-                        anonymized_telemetry=False,  # 关键：禁用遥测
-                        is_persistent=False
-                    )
-                    self._client = chromadb.Client(settings)
+                    if hasattr(chromadb, "EphemeralClient"):
+                        self._client = chromadb.EphemeralClient()
+                    else:
+                        settings = Settings(
+                            allow_reset=True,
+                            anonymized_telemetry=False,  # 关键：禁用遥测
+                            is_persistent=False
+                        )
+                        self._client = chromadb.Client(settings)
                     logger.info(f"📚 [ChromaDB] 使用备用配置初始化完成")
                 except Exception as backup_error:
                     # 最后的备用方案
