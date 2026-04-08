@@ -55,9 +55,6 @@ warnings.warn(
 try:
     from .mongodb_storage import (
         MongoDBStorage,
-        describe_mongodb_connection_target,
-        get_mongodb_runtime_context,
-        redact_mongodb_connection_string,
     )
     MONGODB_AVAILABLE = True
 except ImportError as e:
@@ -66,18 +63,12 @@ except ImportError as e:
     logger.error(f"   堆栈: {traceback.format_exc()}")
     MONGODB_AVAILABLE = False
     MongoDBStorage = None
-    describe_mongodb_connection_target = None
-    get_mongodb_runtime_context = None
-    redact_mongodb_connection_string = None
 except Exception as e:
     logger.error(f"❌ [ConfigManager] 导入 MongoDBStorage 失败 (Exception): {e}")
     import traceback
     logger.error(f"   堆栈: {traceback.format_exc()}")
     MONGODB_AVAILABLE = False
     MongoDBStorage = None
-    describe_mongodb_connection_target = None
-    get_mongodb_runtime_context = None
-    redact_mongodb_connection_string = None
 
 
 class ConfigManager:
@@ -192,31 +183,9 @@ class ConfigManager:
         try:
             connection_string = os.getenv("MONGODB_CONNECTION_STRING")
             database_name = os.getenv("MONGODB_DATABASE_NAME", "tradingagents")
-            discrete_host = os.getenv("MONGODB_HOST", "")
-            discrete_port = os.getenv("MONGODB_PORT", "")
-            discrete_database = os.getenv("MONGODB_DATABASE", "")
-            discrete_username = os.getenv("MONGODB_USERNAME", "")
 
             logger.info(f"🔍 [ConfigManager] MONGODB_CONNECTION_STRING={'已设置' if connection_string else '未设置'}")
             logger.info(f"🔍 [ConfigManager] MONGODB_DATABASE_NAME={database_name}")
-            if connection_string and redact_mongodb_connection_string and describe_mongodb_connection_target:
-                logger.info(
-                    "🔍 [ConfigManager] MongoDB 连接诊断: target=%s, uri=%s",
-                    describe_mongodb_connection_target(connection_string),
-                    redact_mongodb_connection_string(connection_string),
-                )
-            logger.info(
-                "🔍 [ConfigManager] 离散Mongo配置: host=%s, port=%s, database=%s, username=%s",
-                discrete_host or "-",
-                discrete_port or "-",
-                discrete_database or "-",
-                discrete_username or "-",
-            )
-            if get_mongodb_runtime_context:
-                logger.info(
-                    "🔍 [ConfigManager] 运行上下文: %s",
-                    get_mongodb_runtime_context(),
-                )
 
             if not connection_string:
                 logger.error("❌ [ConfigManager] MONGODB_CONNECTION_STRING 未设置，无法初始化 MongoDB 存储")
