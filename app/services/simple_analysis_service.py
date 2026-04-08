@@ -83,14 +83,14 @@ def _get_cached_task_stock_name(collection_name: str, query: Dict[str, Any]) -> 
 
 
 def _get_us_yfinance_utils():
-    """懒加载美股 yfinance 工具，避免服务启动时引入额外依赖开销。"""
+    """懒加载美股 yfinance 工具类，避免服务启动时引入额外依赖开销。"""
     global _us_yfinance_utils
     if _us_yfinance_utils is not None:
         return _us_yfinance_utils
 
     try:
         from tradingagents.dataflows.providers.us.yfinance import YFinanceUtils
-        _us_yfinance_utils = YFinanceUtils()
+        _us_yfinance_utils = YFinanceUtils
         return _us_yfinance_utils
     except Exception as exc:
         logger.warning(f"⚠️ 初始化美股yfinance工具失败: {exc}")

@@ -51,6 +51,29 @@ def test_resolve_stock_name_by_market_reads_us_cache(monkeypatch):
     }]
 
 
+def test_resolve_stock_name_by_market_uses_yfinance_class_on_us_cache_miss(monkeypatch):
+    calls = []
+
+    class FakeYFinanceUtils:
+        @staticmethod
+        def get_stock_info(symbol):
+            calls.append(symbol)
+            return {"longName": "Taiwan Semiconductor"}
+
+    monkeypatch.setattr(simple_analysis_service, "_get_cached_task_stock_name", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(simple_analysis_service, "_us_yfinance_utils", None)
+
+    import tradingagents.dataflows.providers.us.yfinance as yfinance_module
+
+    monkeypatch.setattr(yfinance_module, "YFinanceUtils", FakeYFinanceUtils)
+
+    result = simple_analysis_service._resolve_stock_name_by_market("TSM")
+
+    assert result == "Taiwan Semiconductor"
+    assert calls == ["TSM"]
+    assert simple_analysis_service._us_yfinance_utils is FakeYFinanceUtils
+
+
 def test_enrich_stock_names_rewrites_non_a_share_names(monkeypatch):
     service = object.__new__(simple_analysis_service.SimpleAnalysisService)
     service._stock_name_cache = {}

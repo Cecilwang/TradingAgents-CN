@@ -41,7 +41,7 @@ class USSyncService:
         self.settings = settings
 
         # 数据提供器
-        self.yfinance_provider = YFinanceUtils()
+        self.yfinance_provider = YFinanceUtils
 
         # 美股列表缓存（从 Finnhub 动态获取）
         self.us_stock_list = []
@@ -440,4 +440,3 @@ async def run_us_status_check():
     except Exception as e:
         logger.error(f"❌ 美股状态检查失败: {e}")
         return {"status": "error", "error": str(e)}
-
