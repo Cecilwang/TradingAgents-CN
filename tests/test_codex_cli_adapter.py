@@ -11,7 +11,11 @@ from langchain_core.outputs import ChatGenerationChunk
 from app.services.config_service import ConfigService
 from tradingagents.graph.trading_graph import create_llm_by_provider
 from tradingagents.llm_adapters import codex_cli_adapter
-from tradingagents.llm_adapters.codex_cli_adapter import ChatCodexCLI, infer_codex_exec_model_name
+from tradingagents.llm_adapters.codex_cli_adapter import (
+    ChatCodexCLI,
+    get_codex_cli_profile_name,
+    infer_codex_exec_model_name,
+)
 
 
 @pytest.mark.parametrize("model_name", ["auto", "default", ""])
@@ -43,7 +47,28 @@ def test_build_codex_command_uses_medium_by_default():
     )
 
     assert 'model_reasoning_effort="medium"' in command
-    assert "service_tier=flex" in command
+    assert "service_tier=fast" not in command
+    assert "service_tier=flex" not in command
+
+
+def test_get_codex_cli_profile_name_from_env(monkeypatch):
+    monkeypatch.setenv("TA_CODEX_PROFILE", "trading")
+
+    assert get_codex_cli_profile_name() == "trading"
+
+
+def test_build_codex_command_includes_optional_profile(monkeypatch):
+    monkeypatch.setenv("TA_CODEX_PROFILE", "trading")
+    llm = ChatCodexCLI(model="codex-gpt-5.4")
+
+    command = llm._build_codex_command(
+        schema_path="/tmp/schema.json",
+        output_path="/tmp/output.json",
+        json_output=True,
+    )
+
+    assert "-p" in command
+    assert command[command.index("-p") + 1] == "trading"
 
 
 def test_build_codex_command_resume_omits_schema_and_sandbox():
