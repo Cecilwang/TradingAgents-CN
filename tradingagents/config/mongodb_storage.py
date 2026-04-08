@@ -5,9 +5,9 @@ MongoDB存储适配器
 """
 
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from dataclasses import asdict
 from .usage_models import UsageRecord
 
@@ -82,7 +82,7 @@ class MongoDBStorage:
             
         except (ConnectionFailure, ServerSelectionTimeoutError) as e:
             logger.error(f"❌ MongoDB连接失败: {e}")
-            logger.info(f"将使用本地JSON文件存储")
+            logger.info("将使用本地JSON文件存储")
             self._connected = False
         except Exception as e:
             logger.error(f"❌ MongoDB初始化失败: {e}")
@@ -114,7 +114,7 @@ class MongoDBStorage:
     def save_usage_record(self, record: UsageRecord) -> bool:
         """保存单个使用记录到MongoDB"""
         if not self._connected:
-            logger.warning(f"⚠️ [MongoDB存储] 未连接，无法保存记录")
+            logger.warning("⚠️ [MongoDB存储] 未连接，无法保存记录")
             return False
 
         try:
@@ -135,7 +135,7 @@ class MongoDBStorage:
                 logger.info(f"✅ [MongoDB存储] 记录已保存: ID={result.inserted_id}, {record.provider}/{record.model_name}, ¥{record.cost:.4f}")
                 return True
             else:
-                logger.error(f"❌ [MongoDB存储] 插入失败：未返回插入ID")
+                logger.error("❌ [MongoDB存储] 插入失败：未返回插入ID")
                 return False
 
         except Exception as e:
@@ -201,6 +201,7 @@ class MongoDBStorage:
                         '_id': None,
                         'total_cost': {'$sum': '$cost'},
                         'total_input_tokens': {'$sum': '$input_tokens'},
+                        'total_cached_input_tokens': {'$sum': '$cached_input_tokens'},
                         'total_output_tokens': {'$sum': '$output_tokens'},
                         'total_requests': {'$sum': 1}
                     }
@@ -215,6 +216,7 @@ class MongoDBStorage:
                     'period_days': days,
                     'total_cost': round(stats.get('total_cost', 0), 4),
                     'total_input_tokens': stats.get('total_input_tokens', 0),
+                    'total_cached_input_tokens': stats.get('total_cached_input_tokens', 0),
                     'total_output_tokens': stats.get('total_output_tokens', 0),
                     'total_requests': stats.get('total_requests', 0)
                 }
@@ -223,6 +225,7 @@ class MongoDBStorage:
                     'period_days': days,
                     'total_cost': 0,
                     'total_input_tokens': 0,
+                    'total_cached_input_tokens': 0,
                     'total_output_tokens': 0,
                     'total_requests': 0
                 }
@@ -252,6 +255,7 @@ class MongoDBStorage:
                         '_id': '$provider',
                         'cost': {'$sum': '$cost'},
                         'input_tokens': {'$sum': '$input_tokens'},
+                        'cached_input_tokens': {'$sum': '$cached_input_tokens'},
                         'output_tokens': {'$sum': '$output_tokens'},
                         'requests': {'$sum': 1}
                     }
@@ -266,6 +270,7 @@ class MongoDBStorage:
                 provider_stats[provider] = {
                     'cost': round(result.get('cost', 0), 4),
                     'input_tokens': result.get('input_tokens', 0),
+                    'cached_input_tokens': result.get('cached_input_tokens', 0),
                     'output_tokens': result.get('output_tokens', 0),
                     'requests': result.get('requests', 0)
                 }
@@ -305,4 +310,4 @@ class MongoDBStorage:
         if self.client:
             self.client.close()
             self._connected = False
-            logger.info(f"MongoDB连接已关闭")
+            logger.info("MongoDB连接已关闭")

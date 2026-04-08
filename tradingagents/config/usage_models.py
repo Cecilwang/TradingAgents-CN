@@ -20,6 +20,8 @@ class UsageRecord:
     currency: str = "CNY"  # 货币单位
     session_id: str = ""  # 会话ID
     analysis_type: str = "stock_analysis"  # 分析类型
+    cached_input_tokens: int = 0  # 缓存命中的输入token数
+    provider_session_id: str = ""  # 提供商返回的原始会话ID
 
 
 @dataclass
@@ -42,4 +44,3 @@ class PricingConfig:
     input_price_per_1k: float  # 输入token价格（每1000个token）
     output_price_per_1k: float  # 输出token价格（每1000个token）
     currency: str = "CNY"  # 货币单位
-

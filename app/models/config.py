@@ -2,12 +2,11 @@
 系统配置相关数据模型
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from app.utils.timezone import now_tz
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field, ConfigDict, field_serializer
 from enum import Enum
-from bson import ObjectId
 from .user import PyObjectId
 
 
@@ -322,6 +321,8 @@ class UsageRecord(BaseModel):
     currency: str = Field(default="CNY", description="货币单位")
     session_id: str = Field(..., description="会话ID")
     analysis_type: str = Field(default="stock_analysis", description="分析类型")
+    cached_input_tokens: int = Field(default=0, description="缓存命中的输入token数")
+    provider_session_id: Optional[str] = Field(None, description="提供商原始会话ID")
     stock_code: Optional[str] = Field(None, description="股票代码")
 
 
@@ -329,6 +330,7 @@ class UsageStatistics(BaseModel):
     """使用统计"""
     total_requests: int = Field(default=0, description="总请求数")
     total_input_tokens: int = Field(default=0, description="总输入token数")
+    total_cached_input_tokens: int = Field(default=0, description="总缓存命中的输入token数")
     total_output_tokens: int = Field(default=0, description="总输出token数")
     total_cost: float = Field(default=0.0, description="总成本（已废弃，使用 cost_by_currency）")
     cost_by_currency: Dict[str, float] = Field(default_factory=dict, description="按货币统计的成本")

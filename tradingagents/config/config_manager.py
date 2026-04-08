@@ -16,9 +16,15 @@ import warnings
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, asdict
+from dataclasses import asdict
 from pathlib import Path
 from dotenv import load_dotenv
+from tradingagents.utils.logging_manager import get_logger
+# 运行时设置：读取系统时区
+from tradingagents.config.runtime_settings import get_timezone_name
+from .usage_models import UsageRecord, ModelConfig, PricingConfig
+
+logger = get_logger('agents')
 
 # 发出废弃警告
 warnings.warn(
@@ -28,18 +34,6 @@ warnings.warn(
     DeprecationWarning,
     stacklevel=2
 )
-
-# 导入统一日志系统
-from tradingagents.utils.logging_init import get_logger
-
-# 导入日志模块
-from tradingagents.utils.logging_manager import get_logger
-# 运行时设置：读取系统时区
-from tradingagents.config.runtime_settings import get_timezone_name
-logger = get_logger('agents')
-
-# 导入数据模型（避免循环导入）
-from .usage_models import UsageRecord, ModelConfig, PricingConfig
 
 try:
     from .mongodb_storage import MongoDBStorage
@@ -178,7 +172,7 @@ class ConfigManager:
                 logger.error("❌ [ConfigManager] MONGODB_CONNECTION_STRING 未设置，无法初始化 MongoDB 存储")
                 return
 
-            logger.info(f"🔄 [ConfigManager] 正在创建 MongoDBStorage 实例...")
+            logger.info("🔄 [ConfigManager] 正在创建 MongoDBStorage 实例...")
             self.mongodb_storage = MongoDBStorage(
                 connection_string=connection_string,
                 database_name=database_name
@@ -384,8 +378,17 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"保存使用记录失败: {e}")
     
-    def add_usage_record(self, provider: str, model_name: str, input_tokens: int,
-                        output_tokens: int, session_id: str, analysis_type: str = "stock_analysis"):
+    def add_usage_record(
+        self,
+        provider: str,
+        model_name: str,
+        input_tokens: int,
+        output_tokens: int,
+        session_id: str,
+        analysis_type: str = "stock_analysis",
+        cached_input_tokens: int = 0,
+        provider_session_id: str = "",
+    ):
         """添加使用记录"""
         # 计算成本和货币单位
         cost, currency = self.calculate_cost(provider, model_name, input_tokens, output_tokens)
@@ -399,7 +402,9 @@ class ConfigManager:
             cost=cost,
             currency=currency,
             session_id=session_id,
-            analysis_type=analysis_type
+            analysis_type=analysis_type,
+            cached_input_tokens=cached_input_tokens,
+            provider_session_id=provider_session_id,
         )
 
         # 🔍 详细日志：记录保存位置
@@ -413,14 +418,14 @@ class ConfigManager:
                 logger.info(f"✅ [Token记录] MongoDB 保存成功: {provider}/{model_name}")
                 return record
             else:
-                logger.error(f"⚠️ [Token记录] MongoDB保存失败，回退到JSON文件存储")
+                logger.error("⚠️ [Token记录] MongoDB保存失败，回退到JSON文件存储")
         else:
             # 🔍 详细日志：为什么没有使用MongoDB
             if self.mongodb_storage is None:
-                logger.warning(f"⚠️ [Token记录] MongoDB存储未初始化 (mongodb_storage=None)")
+                logger.warning("⚠️ [Token记录] MongoDB存储未初始化 (mongodb_storage=None)")
                 logger.warning(f"   💡 请检查环境变量: USE_MONGODB_STORAGE={os.getenv('USE_MONGODB_STORAGE', '未设置')}")
             elif not self.mongodb_storage.is_connected():
-                logger.warning(f"⚠️ [Token记录] MongoDB未连接 (is_connected=False)")
+                logger.warning("⚠️ [Token记录] MongoDB未连接 (is_connected=False)")
 
             logger.info(f"📄 [Token记录] 使用 JSON 文件存储: {self.usage_file}")
 
@@ -456,7 +461,7 @@ class ConfigManager:
 
         # 只在找不到配置时输出调试信息
         logger.warning(f"⚠️ [calculate_cost] 未找到匹配的定价配置: {provider}/{model_name}")
-        logger.debug(f"⚠️ [calculate_cost] 可用的配置:")
+        logger.debug("⚠️ [calculate_cost] 可用的配置:")
         for pricing in pricing_configs:
             logger.debug(f"⚠️ [calculate_cost]   - {pricing.provider}/{pricing.model_name}")
 
@@ -587,12 +592,15 @@ class ConfigManager:
                 record_date = datetime.fromisoformat(record.timestamp)
                 if record_date >= cutoff_date:
                     recent_records.append(record)
-            except:
+            except ValueError:
                 continue
         
         # 统计数据
         total_cost = sum(record.cost for record in recent_records)
         total_input_tokens = sum(record.input_tokens for record in recent_records)
+        total_cached_input_tokens = sum(
+            record.cached_input_tokens for record in recent_records
+        )
         total_output_tokens = sum(record.output_tokens for record in recent_records)
         
         # 按供应商统计
@@ -602,11 +610,15 @@ class ConfigManager:
                 provider_stats[record.provider] = {
                     "cost": 0,
                     "input_tokens": 0,
+                    "cached_input_tokens": 0,
                     "output_tokens": 0,
                     "requests": 0
                 }
             provider_stats[record.provider]["cost"] += record.cost
             provider_stats[record.provider]["input_tokens"] += record.input_tokens
+            provider_stats[record.provider]["cached_input_tokens"] += (
+                record.cached_input_tokens
+            )
             provider_stats[record.provider]["output_tokens"] += record.output_tokens
             provider_stats[record.provider]["requests"] += 1
         
@@ -614,6 +626,7 @@ class ConfigManager:
             "period_days": days,
             "total_cost": round(total_cost, 4),
             "total_input_tokens": total_input_tokens,
+            "total_cached_input_tokens": total_cached_input_tokens,
             "total_output_tokens": total_output_tokens,
             "total_requests": len(recent_records),
             "provider_stats": provider_stats,
@@ -695,8 +708,17 @@ class TokenTracker:
     def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
 
-    def track_usage(self, provider: str, model_name: str, input_tokens: int,
-                   output_tokens: int, session_id: str = None, analysis_type: str = "stock_analysis"):
+    def track_usage(
+        self,
+        provider: str,
+        model_name: str,
+        input_tokens: int,
+        output_tokens: int,
+        session_id: str = None,
+        analysis_type: str = "stock_analysis",
+        cached_input_tokens: int = 0,
+        provider_session_id: str = "",
+    ):
         """跟踪Token使用"""
         if session_id is None:
             session_id = f"session_{datetime.now(ZoneInfo(get_timezone_name())).strftime('%Y%m%d_%H%M%S')}"
@@ -715,7 +737,9 @@ class TokenTracker:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             session_id=session_id,
-            analysis_type=analysis_type
+            analysis_type=analysis_type,
+            cached_input_tokens=cached_input_tokens,
+            provider_session_id=provider_session_id,
         )
 
         # 检查成本警告

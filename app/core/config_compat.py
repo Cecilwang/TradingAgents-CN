@@ -10,10 +10,7 @@
 import os
 import asyncio
 from typing import Dict, Any, Optional, List
-from functools import lru_cache
 import warnings
-
-from app.core.config import settings
 
 
 class ConfigManagerCompat:
@@ -193,7 +190,10 @@ class TokenTrackerCompat:
         model_name: str,
         input_tokens: int,
         output_tokens: int,
-        cost: float = 0.0
+        cost: float = 0.0,
+        cached_input_tokens: int = 0,
+        provider_session_id: str = "",
+        **_: Any,
     ):
         """
         记录 Token 使用量
@@ -212,12 +212,14 @@ class TokenTrackerCompat:
                 "provider": provider,
                 "model_name": model_name,
                 "total_input_tokens": 0,
+                "total_cached_input_tokens": 0,
                 "total_output_tokens": 0,
                 "total_cost": 0.0,
                 "call_count": 0,
             }
-        
+
         self._usage_data[key]["total_input_tokens"] += input_tokens
+        self._usage_data[key]["total_cached_input_tokens"] += cached_input_tokens
         self._usage_data[key]["total_output_tokens"] += output_tokens
         self._usage_data[key]["total_cost"] += cost
         self._usage_data[key]["call_count"] += 1
@@ -263,4 +265,3 @@ def get_token_tracker() -> TokenTrackerCompat:
         TokenTrackerCompat: Token 跟踪器兼容实例
     """
     return token_tracker_compat
-

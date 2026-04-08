@@ -37,9 +37,17 @@ from langchain_core.tools import BaseTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic import ConfigDict, Field
 
-from tradingagents.utils.logging_manager import get_logger
+from tradingagents.utils.logging_manager import get_logger, get_logger_manager
 
 logger = get_logger("agents")
+
+try:
+    from tradingagents.config.config_manager import token_tracker
+
+    TOKEN_TRACKING_ENABLED = True
+except ImportError:
+    token_tracker = None
+    TOKEN_TRACKING_ENABLED = False
 
 
 def _default_working_dir() -> str:
@@ -147,20 +155,28 @@ class ChatCodexCLI(BaseChatModel):
             tool_choice=request["tool_choice"],
             parallel_tool_calls=request["parallel_tool_calls"],
         )
-        raw_response = self._run_codex_exec(
-            prompt_text,
-            tools=request["tools"],
-            tool_choice=request["tool_choice"],
-            parallel_tool_calls=request["parallel_tool_calls"],
+        execution_result = self._normalize_execution_result(
+            self._run_codex_exec(
+                prompt_text,
+                tools=request["tools"],
+                tool_choice=request["tool_choice"],
+                parallel_tool_calls=request["parallel_tool_calls"],
+            )
         )
         parsed_response = self._parse_codex_response(
-            raw_response,
+            execution_result["raw_output"],
             tools=request["tools"],
             tool_choice=request["tool_choice"],
             parallel_tool_calls=request["parallel_tool_calls"],
         )
 
-        return self._build_chat_result(parsed_response, start_time)
+        return self._build_chat_result(
+            parsed_response=parsed_response,
+            execution_metadata=execution_result["execution_metadata"],
+            session_id=request["session_id"],
+            analysis_type=request["analysis_type"],
+            start_time=start_time,
+        )
 
     async def _agenerate(
         self,
@@ -178,20 +194,28 @@ class ChatCodexCLI(BaseChatModel):
             tool_choice=request["tool_choice"],
             parallel_tool_calls=request["parallel_tool_calls"],
         )
-        raw_response = await self._arun_codex_exec(
-            prompt_text,
-            tools=request["tools"],
-            tool_choice=request["tool_choice"],
-            parallel_tool_calls=request["parallel_tool_calls"],
+        execution_result = self._normalize_execution_result(
+            await self._arun_codex_exec(
+                prompt_text,
+                tools=request["tools"],
+                tool_choice=request["tool_choice"],
+                parallel_tool_calls=request["parallel_tool_calls"],
+            )
         )
         parsed_response = self._parse_codex_response(
-            raw_response,
+            execution_result["raw_output"],
             tools=request["tools"],
             tool_choice=request["tool_choice"],
             parallel_tool_calls=request["parallel_tool_calls"],
         )
 
-        return self._build_chat_result(parsed_response, start_time)
+        return self._build_chat_result(
+            parsed_response=parsed_response,
+            execution_metadata=execution_result["execution_metadata"],
+            session_id=request["session_id"],
+            analysis_type=request["analysis_type"],
+            start_time=start_time,
+        )
 
     def _stream(
         self,
@@ -213,6 +237,7 @@ class ChatCodexCLI(BaseChatModel):
             "saw_text": False,
             "saw_tool_call": False,
             "raw_response": None,
+            "execution_metadata": {},
         }
 
         yield from self._stream_codex_exec(
@@ -239,10 +264,17 @@ class ChatCodexCLI(BaseChatModel):
             self._notify_sync_stream_chunk(run_manager, fallback_chunk)
             yield fallback_chunk
 
+        self._track_codex_usage(
+            execution_metadata=stream_state["execution_metadata"],
+            session_id=request["session_id"],
+            analysis_type=request["analysis_type"],
+        )
+
         elapsed = time.time() - start_time
         logger.info(
-            "✅ [Codex CLI] 流式调用完成: model=%s, tool_calls=%s, elapsed=%.2fs",
+            "✅ [Codex CLI] 流式调用完成: model=%s, codex_session_id=%s, tool_calls=%s, elapsed=%.2fs",
             self.model_name,
+            stream_state["execution_metadata"].get("thread_id") or "-",
             len(parsed_response["tool_calls"]),
             elapsed,
         )
@@ -267,6 +299,7 @@ class ChatCodexCLI(BaseChatModel):
             "saw_text": False,
             "saw_tool_call": False,
             "raw_response": None,
+            "execution_metadata": {},
         }
 
         async for chunk in self._astream_codex_exec(
@@ -294,10 +327,17 @@ class ChatCodexCLI(BaseChatModel):
             await self._notify_async_stream_chunk(run_manager, fallback_chunk)
             yield fallback_chunk
 
+        self._track_codex_usage(
+            execution_metadata=stream_state["execution_metadata"],
+            session_id=request["session_id"],
+            analysis_type=request["analysis_type"],
+        )
+
         elapsed = time.time() - start_time
         logger.info(
-            "✅ [Codex CLI] 异步流式调用完成: model=%s, tool_calls=%s, elapsed=%.2fs",
+            "✅ [Codex CLI] 异步流式调用完成: model=%s, codex_session_id=%s, tool_calls=%s, elapsed=%.2fs",
             self.model_name,
+            stream_state["execution_metadata"].get("thread_id") or "-",
             len(parsed_response["tool_calls"]),
             elapsed,
         )
@@ -305,24 +345,179 @@ class ChatCodexCLI(BaseChatModel):
     def _build_chat_result(
         self,
         parsed_response: Dict[str, Any],
+        execution_metadata: Dict[str, Any],
+        session_id: Optional[str],
+        analysis_type: Optional[str],
         start_time: float,
     ) -> ChatResult:
         """将规整后的响应构造成 LangChain ChatResult。"""
+        response_metadata = self._build_response_metadata(
+            execution_metadata=execution_metadata,
+            session_id=session_id,
+        )
+        usage_metadata = self._build_usage_metadata(execution_metadata)
         ai_message = AIMessage(
             content=parsed_response["content"],
             tool_calls=parsed_response["tool_calls"],
+            response_metadata=response_metadata,
+            usage_metadata=usage_metadata,
         )
         generation = ChatGeneration(message=ai_message)
+        self._track_codex_usage(
+            execution_metadata=execution_metadata,
+            session_id=session_id,
+            analysis_type=analysis_type,
+        )
 
         elapsed = time.time() - start_time
         logger.info(
-            "✅ [Codex CLI] 调用完成: model=%s, tool_calls=%s, elapsed=%.2fs",
+            "✅ [Codex CLI] 调用完成: model=%s, codex_session_id=%s, tool_calls=%s, elapsed=%.2fs",
             self.model_name,
+            execution_metadata.get("thread_id") or "-",
             len(parsed_response["tool_calls"]),
             elapsed,
         )
 
-        return ChatResult(generations=[generation])
+        return ChatResult(
+            generations=[generation],
+            llm_output={
+                "session_id": execution_metadata.get("thread_id") or "",
+                "analysis_session_id": session_id or "",
+                "token_usage": response_metadata.get("token_usage", {}),
+            },
+        )
+
+    def _normalize_execution_result(
+        self,
+        execution_result: Union[str, Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """兼容旧测试桩和新版执行结果结构。"""
+        if isinstance(execution_result, str):
+            return {
+                "raw_output": execution_result,
+                "execution_metadata": {},
+            }
+
+        if isinstance(execution_result, dict):
+            raw_output = execution_result.get("raw_output")
+            execution_metadata = execution_result.get("execution_metadata")
+            if isinstance(raw_output, str) and isinstance(execution_metadata, dict):
+                return {
+                    "raw_output": raw_output,
+                    "execution_metadata": execution_metadata,
+                }
+
+        raise ValueError(
+            "Codex CLI 执行结果格式无效，必须包含 raw_output 和 execution_metadata。"
+        )
+
+    def _build_response_metadata(
+        self,
+        *,
+        execution_metadata: Dict[str, Any],
+        session_id: Optional[str],
+    ) -> Dict[str, Any]:
+        """构造 LangChain 消息级别的响应元数据。"""
+        token_usage = self._build_token_usage(execution_metadata)
+        codex_session_id = execution_metadata.get("thread_id") or ""
+
+        return {
+            "provider": "codex",
+            "session_id": codex_session_id,
+            "analysis_session_id": session_id or "",
+            "token_usage": token_usage,
+        }
+
+    def _build_usage_metadata(
+        self,
+        execution_metadata: Dict[str, Any],
+    ) -> Dict[str, int]:
+        """构造 LangChain usage_metadata，供上层统一读取。"""
+        usage = execution_metadata.get("usage") or {}
+        if not isinstance(usage, dict):
+            usage = {}
+
+        return {
+            "input_tokens": int(usage.get("input_tokens", 0) or 0),
+            "output_tokens": int(usage.get("output_tokens", 0) or 0),
+            "total_tokens": int(usage.get("total_tokens", 0) or 0),
+            "cached_input_tokens": int(usage.get("cached_input_tokens", 0) or 0),
+        }
+
+    def _build_token_usage(
+        self,
+        execution_metadata: Dict[str, Any],
+    ) -> Dict[str, int]:
+        """构造兼容现有调用方的 token_usage 结构。"""
+        usage_metadata = self._build_usage_metadata(execution_metadata)
+        return {
+            "prompt_tokens": usage_metadata["input_tokens"],
+            "completion_tokens": usage_metadata["output_tokens"],
+            "total_tokens": usage_metadata["total_tokens"],
+            "cached_input_tokens": usage_metadata["cached_input_tokens"],
+        }
+
+    def _track_codex_usage(
+        self,
+        *,
+        execution_metadata: Dict[str, Any],
+        session_id: Optional[str],
+        analysis_type: Optional[str],
+    ) -> None:
+        """记录 Codex CLI 的 token 使用和会话标识。"""
+        usage_metadata = self._build_usage_metadata(execution_metadata)
+        input_tokens = usage_metadata["input_tokens"]
+        output_tokens = usage_metadata["output_tokens"]
+        cached_input_tokens = usage_metadata["cached_input_tokens"]
+        codex_session_id = execution_metadata.get("thread_id") or ""
+
+        if not codex_session_id and input_tokens == 0 and output_tokens == 0:
+            return
+
+        effective_session_id = session_id or codex_session_id or ""
+        logger.info(
+            "📊 [Codex CLI] session_id=%s, analysis_session_id=%s, input_tokens=%s, cached_input_tokens=%s, output_tokens=%s",
+            codex_session_id or "-",
+            session_id or "-",
+            input_tokens,
+            cached_input_tokens,
+            output_tokens,
+        )
+
+        if (
+            not TOKEN_TRACKING_ENABLED
+            or token_tracker is None
+            or (input_tokens == 0 and output_tokens == 0)
+        ):
+            return
+
+        try:
+            usage_record = token_tracker.track_usage(
+                provider="codex",
+                model_name=self.model_name,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_input_tokens=cached_input_tokens,
+                session_id=effective_session_id or codex_session_id,
+                analysis_type=analysis_type or "stock_analysis",
+                provider_session_id=codex_session_id,
+            )
+
+            if usage_record:
+                logger_manager = get_logger_manager()
+                logger_manager.log_token_usage(
+                    logger,
+                    "codex",
+                    self.model_name,
+                    input_tokens,
+                    output_tokens,
+                    usage_record.cost,
+                    effective_session_id or codex_session_id,
+                    cached_input_tokens=cached_input_tokens,
+                    provider_session_id=codex_session_id,
+                )
+        except Exception as exc:
+            logger.warning("⚠️ [Codex CLI] Token统计失败: %s", exc, exc_info=True)
 
     def _normalize_tool_choice(
         self,
@@ -365,6 +560,8 @@ class ChatCodexCLI(BaseChatModel):
         kwargs: Dict[str, Any],
     ) -> Dict[str, Any]:
         """抽取并规整工具调用相关参数，供同步/异步入口共享。"""
+        session_id = kwargs.pop("session_id", None)
+        analysis_type = kwargs.pop("analysis_type", None)
         strict = kwargs.pop("strict", None)
         tools = self._format_tools(kwargs.pop("tools", None), strict=strict)
         tool_choice = self._normalize_tool_choice(
@@ -387,6 +584,8 @@ class ChatCodexCLI(BaseChatModel):
             "tools": tools,
             "tool_choice": tool_choice,
             "parallel_tool_calls": parallel_tool_calls,
+            "session_id": session_id,
+            "analysis_type": analysis_type,
         }
 
     def _format_tools(
@@ -781,8 +980,8 @@ class ChatCodexCLI(BaseChatModel):
         tools: Sequence[Dict[str, Any]],
         tool_choice: Optional[str],
         parallel_tool_calls: Optional[bool],
-    ) -> str:
-        """执行 `codex exec` 并返回最后一条消息的原始文本。"""
+    ) -> Dict[str, Any]:
+        """执行 `codex exec` 并返回结构化输出与会话元数据。"""
         if not is_codex_cli_available(self.codex_command):
             raise ValueError(
                 "未检测到可用的 Codex CLI。请先安装并确认 `codex --version` 可执行。"
@@ -795,7 +994,7 @@ class ChatCodexCLI(BaseChatModel):
         command = self._build_codex_command(
             schema_path=schema_path,
             output_path=output_path,
-            json_output=False,
+            json_output=True,
         )
 
         logger.info(
@@ -838,8 +1037,8 @@ class ChatCodexCLI(BaseChatModel):
         tools: Sequence[Dict[str, Any]],
         tool_choice: Optional[str],
         parallel_tool_calls: Optional[bool],
-    ) -> str:
-        """异步执行 `codex exec` 并返回最后一条消息的原始文本。"""
+    ) -> Dict[str, Any]:
+        """异步执行 `codex exec` 并返回结构化输出与会话元数据。"""
         if not is_codex_cli_available(self.codex_command):
             raise ValueError(
                 "未检测到可用的 Codex CLI。请先安装并确认 `codex --version` 可执行。"
@@ -852,7 +1051,7 @@ class ChatCodexCLI(BaseChatModel):
         command = self._build_codex_command(
             schema_path=schema_path,
             output_path=output_path,
-            json_output=False,
+            json_output=True,
         )
 
         logger.info(
@@ -945,13 +1144,15 @@ class ChatCodexCLI(BaseChatModel):
 
             stderr_text = process.stderr.read() if process.stderr else ""
             returncode = process.wait()
-            stream_state["raw_response"] = self._finalize_codex_execution(
+            execution_result = self._finalize_codex_execution(
                 returncode=returncode,
                 stdout_text="".join(stdout_lines),
                 stderr_text=stderr_text,
                 schema_path=schema_path,
                 output_path=output_path,
             )
+            stream_state["raw_response"] = execution_result["raw_output"]
+            stream_state["execution_metadata"] = execution_result["execution_metadata"]
         except FileNotFoundError as exc:
             self._cleanup_temp_files(schema_path, output_path)
             raise ValueError("未找到 `codex` 命令，请先安装 Codex CLI。") from exc
@@ -1018,13 +1219,15 @@ class ChatCodexCLI(BaseChatModel):
             if process.stderr is not None:
                 stderr_bytes = await process.stderr.read()
             returncode = await process.wait()
-            stream_state["raw_response"] = self._finalize_codex_execution(
+            execution_result = self._finalize_codex_execution(
                 returncode=returncode,
                 stdout_text="".join(stdout_lines),
                 stderr_text=stderr_bytes.decode("utf-8", errors="replace"),
                 schema_path=schema_path,
                 output_path=output_path,
             )
+            stream_state["raw_response"] = execution_result["raw_output"]
+            stream_state["execution_metadata"] = execution_result["execution_metadata"]
         except FileNotFoundError as exc:
             self._cleanup_temp_files(schema_path, output_path)
             raise ValueError("未找到 `codex` 命令，请先安装 Codex CLI。") from exc
@@ -1337,7 +1540,7 @@ class ChatCodexCLI(BaseChatModel):
         stderr_text: str,
         schema_path: str,
         output_path: str,
-    ) -> str:
+    ) -> Dict[str, Any]:
         """读取最终输出、清理临时文件，并统一处理失败场景。"""
         try:
             output_file = Path(output_path)
@@ -1346,6 +1549,8 @@ class ChatCodexCLI(BaseChatModel):
                 raw_output = output_file.read_text(encoding="utf-8").strip()
         finally:
             self._cleanup_temp_files(schema_path, output_path)
+
+        execution_metadata = self._extract_execution_metadata(stdout_text)
 
         if returncode != 0:
             logger.error(
@@ -1361,7 +1566,58 @@ class ChatCodexCLI(BaseChatModel):
         if not raw_output:
             raise RuntimeError("Codex CLI 未返回可解析的输出内容。")
 
-        return raw_output
+        return {
+            "raw_output": raw_output,
+            "execution_metadata": execution_metadata,
+        }
+
+    def _extract_execution_metadata(self, stdout_text: str) -> Dict[str, Any]:
+        """从 Codex CLI `--json` 事件流中提取 session 和 token 使用量。"""
+        thread_id = ""
+        usage = {
+            "input_tokens": 0,
+            "cached_input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+        }
+
+        for raw_line in stdout_text.splitlines():
+            event = self._load_stream_event(raw_line)
+            if event is None:
+                continue
+
+            event_type = event.get("type")
+            if event_type == "thread.started":
+                candidate_thread_id = event.get("thread_id")
+                if isinstance(candidate_thread_id, str) and candidate_thread_id:
+                    thread_id = candidate_thread_id
+                continue
+
+            if event_type not in {"turn.completed", "response.completed"}:
+                continue
+
+            raw_usage = event.get("usage")
+            if not isinstance(raw_usage, dict):
+                response_payload = event.get("response")
+                if isinstance(response_payload, dict):
+                    raw_usage = response_payload.get("usage")
+            if not isinstance(raw_usage, dict):
+                continue
+
+            input_tokens = int(raw_usage.get("input_tokens", 0) or 0)
+            cached_input_tokens = int(raw_usage.get("cached_input_tokens", 0) or 0)
+            output_tokens = int(raw_usage.get("output_tokens", 0) or 0)
+            usage = {
+                "input_tokens": input_tokens,
+                "cached_input_tokens": cached_input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": input_tokens + output_tokens,
+            }
+
+        return {
+            "thread_id": thread_id,
+            "usage": usage,
+        }
 
     def _cleanup_temp_files(self, *temp_paths: str) -> None:
         """清理调用过程中产生的临时文件。"""

@@ -5,7 +5,7 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 from collections import defaultdict
 
 from app.core.database import get_mongo_db
@@ -28,7 +28,7 @@ class UsageStatisticsService:
             collection = db[self.collection_name]
 
             record_dict = record.model_dump(exclude={"id"})
-            result = await collection.insert_one(record_dict)
+            await collection.insert_one(record_dict)
 
             logger.info(f"✅ 添加使用记录成功: {record.provider}/{record.model_name}")
             return True
@@ -119,6 +119,7 @@ class UsageStatisticsService:
             by_provider = defaultdict(lambda: {
                 "requests": 0,
                 "input_tokens": 0,
+                "cached_input_tokens": 0,
                 "output_tokens": 0,
                 "cost": 0.0,
                 "cost_by_currency": defaultdict(float)
@@ -126,6 +127,7 @@ class UsageStatisticsService:
             by_model = defaultdict(lambda: {
                 "requests": 0,
                 "input_tokens": 0,
+                "cached_input_tokens": 0,
                 "output_tokens": 0,
                 "cost": 0.0,
                 "cost_by_currency": defaultdict(float)
@@ -133,6 +135,7 @@ class UsageStatisticsService:
             by_date = defaultdict(lambda: {
                 "requests": 0,
                 "input_tokens": 0,
+                "cached_input_tokens": 0,
                 "output_tokens": 0,
                 "cost": 0.0,
                 "cost_by_currency": defaultdict(float)
@@ -144,6 +147,7 @@ class UsageStatisticsService:
 
                 # 总计
                 stats.total_input_tokens += record.get("input_tokens", 0)
+                stats.total_cached_input_tokens += record.get("cached_input_tokens", 0)
                 stats.total_output_tokens += record.get("output_tokens", 0)
                 stats.total_cost += cost  # 保留向后兼容
                 cost_by_currency[currency] += cost
@@ -152,6 +156,7 @@ class UsageStatisticsService:
                 provider_key = record.get("provider", "unknown")
                 by_provider[provider_key]["requests"] += 1
                 by_provider[provider_key]["input_tokens"] += record.get("input_tokens", 0)
+                by_provider[provider_key]["cached_input_tokens"] += record.get("cached_input_tokens", 0)
                 by_provider[provider_key]["output_tokens"] += record.get("output_tokens", 0)
                 by_provider[provider_key]["cost"] += cost
                 by_provider[provider_key]["cost_by_currency"][currency] += cost
@@ -160,6 +165,7 @@ class UsageStatisticsService:
                 model_key = f"{record.get('provider', 'unknown')}/{record.get('model_name', 'unknown')}"
                 by_model[model_key]["requests"] += 1
                 by_model[model_key]["input_tokens"] += record.get("input_tokens", 0)
+                by_model[model_key]["cached_input_tokens"] += record.get("cached_input_tokens", 0)
                 by_model[model_key]["output_tokens"] += record.get("output_tokens", 0)
                 by_model[model_key]["cost"] += cost
                 by_model[model_key]["cost_by_currency"][currency] += cost
@@ -170,6 +176,7 @@ class UsageStatisticsService:
                     date_key = timestamp[:10]  # YYYY-MM-DD
                     by_date[date_key]["requests"] += 1
                     by_date[date_key]["input_tokens"] += record.get("input_tokens", 0)
+                    by_date[date_key]["cached_input_tokens"] += record.get("cached_input_tokens", 0)
                     by_date[date_key]["output_tokens"] += record.get("output_tokens", 0)
                     by_date[date_key]["cost"] += cost
                     by_date[date_key]["cost_by_currency"][currency] += cost
@@ -234,4 +241,3 @@ class UsageStatisticsService:
 
 # 创建全局实例
 usage_statistics_service = UsageStatisticsService()
-

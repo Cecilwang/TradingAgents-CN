@@ -10,7 +10,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional
 import json
 import toml
 
@@ -408,17 +408,28 @@ class TradingAgentsLogger:
             exc_info=True
         )
     
-    def log_token_usage(self, logger: logging.Logger, provider: str, model: str, 
-                       input_tokens: int, output_tokens: int, cost: float, session_id: str):
+    def log_token_usage(
+        self,
+        logger: logging.Logger,
+        provider: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost: float,
+        session_id: str,
+        cached_input_tokens: int = 0,
+        provider_session_id: str = "",
+    ):
         """记录Token使用"""
         logger.info(
-            f"📊 Token使用 - {provider}/{model}: 输入={input_tokens}, 输出={output_tokens}, 成本=¥{cost:.6f}",
+            f"📊 Token使用 - {provider}/{model}: 输入={input_tokens}, 缓存命中={cached_input_tokens}, 输出={output_tokens}, 成本=¥{cost:.6f}",
             extra={
                 'provider': provider,
                 'model': model,
-                'tokens': {'input': input_tokens, 'output': output_tokens},
+                'tokens': {'input': input_tokens, 'cached_input': cached_input_tokens, 'output': output_tokens},
                 'cost': cost,
                 'session_id': session_id,
+                'provider_session_id': provider_session_id,
                 'event_type': 'token_usage'
             }
         )

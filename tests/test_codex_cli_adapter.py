@@ -168,6 +168,111 @@ def test_agenerate_returns_ai_message_with_tool_calls(monkeypatch):
     assert message.tool_calls[0]["args"] == {"ticker": "NVDA"}
 
 
+def test_extract_execution_metadata_reads_thread_and_usage():
+    llm = ChatCodexCLI(model="gpt-5.4")
+
+    stdout_text = "\n".join(
+        [
+            json.dumps(
+                {
+                    "type": "thread.started",
+                    "thread_id": "thread_123",
+                },
+                ensure_ascii=False,
+            ),
+            json.dumps(
+                {
+                    "type": "turn.completed",
+                    "usage": {
+                        "input_tokens": 120,
+                        "cached_input_tokens": 30,
+                        "output_tokens": 45,
+                    },
+                },
+                ensure_ascii=False,
+            ),
+        ]
+    )
+
+    metadata = llm._extract_execution_metadata(stdout_text)
+
+    assert metadata["thread_id"] == "thread_123"
+    assert metadata["usage"] == {
+        "input_tokens": 120,
+        "cached_input_tokens": 30,
+        "output_tokens": 45,
+        "total_tokens": 165,
+    }
+
+
+def test_generate_attaches_codex_usage_metadata(monkeypatch):
+    llm = ChatCodexCLI(model="gpt-5.4")
+
+    monkeypatch.setattr(codex_cli_adapter, "TOKEN_TRACKING_ENABLED", False)
+
+    def mock_run_codex_exec(
+        prompt_text: str,
+        *,
+        tools,
+        tool_choice,
+        parallel_tool_calls,
+    ):
+        assert "会话消息如下" in prompt_text
+        return {
+            "raw_output": json.dumps(
+                {
+                    "content": "执行完成",
+                    "tool_calls": [],
+                },
+                ensure_ascii=False,
+            ),
+            "execution_metadata": {
+                "thread_id": "thread_456",
+                "usage": {
+                    "input_tokens": 210,
+                    "cached_input_tokens": 80,
+                    "output_tokens": 55,
+                    "total_tokens": 265,
+                },
+            },
+        }
+
+    monkeypatch.setattr(llm, "_run_codex_exec", mock_run_codex_exec)
+
+    result = llm._generate(
+        [HumanMessage(content="给出最终结果")],
+        session_id="analysis_789",
+        analysis_type="stock_analysis",
+    )
+
+    message = result.generations[0].message
+
+    assert message.response_metadata["session_id"] == "thread_456"
+    assert message.response_metadata["analysis_session_id"] == "analysis_789"
+    assert message.response_metadata["token_usage"] == {
+        "prompt_tokens": 210,
+        "completion_tokens": 55,
+        "total_tokens": 265,
+        "cached_input_tokens": 80,
+    }
+    assert message.usage_metadata == {
+        "input_tokens": 210,
+        "output_tokens": 55,
+        "total_tokens": 265,
+        "cached_input_tokens": 80,
+    }
+    assert result.llm_output == {
+        "session_id": "thread_456",
+        "analysis_session_id": "analysis_789",
+        "token_usage": {
+            "prompt_tokens": 210,
+            "completion_tokens": 55,
+            "total_tokens": 265,
+            "cached_input_tokens": 80,
+        },
+    }
+
+
 def test_create_llm_by_provider_returns_codex_cli():
     llm = create_llm_by_provider(
         provider="codex",
@@ -226,18 +331,28 @@ def test_run_codex_exec_includes_cli_overrides(monkeypatch):
         lambda self, encoding="utf-8": '{"content":"ok","tool_calls":[]}',
     )
 
-    raw_output = llm._run_codex_exec(
+    execution_result = llm._run_codex_exec(
         "hello",
         tools=[],
         tool_choice=None,
         parallel_tool_calls=None,
     )
 
-    assert raw_output == '{"content":"ok","tool_calls":[]}'
+    assert execution_result["raw_output"] == '{"content":"ok","tool_calls":[]}'
+    assert execution_result["execution_metadata"] == {
+        "thread_id": "",
+        "usage": {
+            "input_tokens": 0,
+            "cached_input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+        },
+    }
     assert captured["command"][0:3] == ["codex", "-a", "untrusted"]
     assert 'model_reasoning_effort="high"' in captured["command"]
     assert 'service_tier="fast"' in captured["command"]
     assert "exec" in captured["command"]
+    assert "--json" in captured["command"]
     assert "workspace-write" in captured["command"]
 
 

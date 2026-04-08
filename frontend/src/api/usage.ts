@@ -11,16 +11,19 @@ export interface UsageRecord {
   provider: string
   model_name: string
   input_tokens: number
+  cached_input_tokens?: number
   output_tokens: number
   cost: number
   currency?: string
   session_id: string
+  provider_session_id?: string
   analysis_type: string
 }
 
 export interface UsageStatistics {
   total_requests: number
   total_input_tokens: number
+  total_cached_input_tokens?: number
   total_output_tokens: number
   total_cost: number
   cost_by_currency: Record<string, number>
@@ -102,4 +105,3 @@ export function deleteOldRecords(days: number = 90) {
     params: { days }
   })
 }
-
