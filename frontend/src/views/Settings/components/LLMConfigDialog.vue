@@ -262,6 +262,7 @@
             clearable
             placeholder="留空则沿用本机 Codex CLI 默认值"
           >
+            <el-option label="None" value="none" />
             <el-option label="Low" value="low" />
             <el-option label="Medium" value="medium" />
             <el-option label="High" value="high" />
