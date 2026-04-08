@@ -13,6 +13,11 @@ from app.constants.model_capabilities import (
     ModelFeature
 )
 from app.core.unified_config import unified_config
+from app.models.config import (
+    CODEX_DEFAULT_MODEL_NAME,
+    CODEX_DEEP_MODEL_NAME,
+    infer_codex_capability_model_name,
+)
 import logging
 import re
 
@@ -69,8 +74,10 @@ class ModelCapabilityService:
             (能力等级, 映射的原模型名) 元组
         """
         # 1. 先尝试直接匹配
-        if model_name in DEFAULT_MODEL_CAPABILITIES:
-            return DEFAULT_MODEL_CAPABILITIES[model_name]["capability_level"], None
+        normalized_model_name = infer_codex_capability_model_name(model_name) or model_name
+        if normalized_model_name in DEFAULT_MODEL_CAPABILITIES:
+            mapped_from = None if normalized_model_name == model_name else normalized_model_name
+            return DEFAULT_MODEL_CAPABILITIES[normalized_model_name]["capability_level"], mapped_from
 
         # 2. 尝试解析聚合渠道模型名
         provider, original_model = self._parse_aggregator_model_name(model_name)
@@ -190,8 +197,13 @@ class ModelCapabilityService:
             logger.warning(f"从 MongoDB 读取模型信息失败: {e}", exc_info=True)
 
         # 2. 从默认映射表读取（直接匹配）
-        if model_name in DEFAULT_MODEL_CAPABILITIES:
-            return DEFAULT_MODEL_CAPABILITIES[model_name]
+        normalized_model_name = infer_codex_capability_model_name(model_name) or model_name
+        if normalized_model_name in DEFAULT_MODEL_CAPABILITIES:
+            config = DEFAULT_MODEL_CAPABILITIES[normalized_model_name].copy()
+            config["model_name"] = model_name
+            if normalized_model_name != model_name:
+                config["_mapped_from"] = normalized_model_name
+            return config
 
         # 3. 尝试聚合渠道模型映射
         provider, original_model = self._parse_aggregator_model_name(model_name)
@@ -401,7 +413,7 @@ class ModelCapabilityService:
             return quick_model, deep_model
         except Exception as e:
             logger.error(f"获取默认模型失败: {e}")
-            return "gpt-5.4", "gpt-5.4"
+            return CODEX_DEFAULT_MODEL_NAME, CODEX_DEEP_MODEL_NAME
     
     def _recommend_model(self, model_type: str, min_level: int) -> str:
         """推荐满足要求的模型"""

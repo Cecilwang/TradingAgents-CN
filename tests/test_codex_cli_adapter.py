@@ -3,6 +3,7 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
 from langchain_core.language_models.chat_models import generate_from_stream
 from langchain_core.messages import AIMessageChunk, HumanMessage
 from langchain_core.outputs import ChatGenerationChunk
@@ -10,7 +11,38 @@ from langchain_core.outputs import ChatGenerationChunk
 from app.services.config_service import ConfigService
 from tradingagents.graph.trading_graph import create_llm_by_provider
 from tradingagents.llm_adapters import codex_cli_adapter
-from tradingagents.llm_adapters.codex_cli_adapter import ChatCodexCLI
+from tradingagents.llm_adapters.codex_cli_adapter import ChatCodexCLI, infer_codex_exec_model_name
+
+
+@pytest.mark.parametrize("model_name", ["auto", "default", ""])
+def test_infer_codex_exec_model_name_rejects_implicit_models(model_name: str):
+    with pytest.raises(ValueError, match="不能使用 auto/default"):
+        infer_codex_exec_model_name(model_name)
+
+
+def test_build_codex_command_always_passes_explicit_model():
+    llm = ChatCodexCLI(model="codex-gpt-5.4-medium")
+
+    command = llm._build_codex_command(
+        schema_path="/tmp/schema.json",
+        output_path="/tmp/output.json",
+        json_output=True,
+    )
+
+    assert "-m" in command
+    assert command[command.index("-m") + 1] == "gpt-5.4"
+
+
+def test_build_codex_command_uses_medium_by_default():
+    llm = ChatCodexCLI(model="codex-gpt-5.4")
+
+    command = llm._build_codex_command(
+        schema_path="/tmp/schema.json",
+        output_path="/tmp/output.json",
+        json_output=True,
+    )
+
+    assert 'model_reasoning_effort="medium"' in command
 
 
 def test_parse_codex_response_with_tool_calls():

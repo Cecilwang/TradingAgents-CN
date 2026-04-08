@@ -183,8 +183,15 @@ DEFAULT_MODEL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "performance_metrics": {"speed": 2, "cost": 3, "quality": 5},
         "description": "O4 Mini，新一代推理模型"
     },
-    
-    "gpt-5.4": {
+    "codex-gpt-5.4-mini": {
+        "capability_level": 4,
+        "suitable_roles": [ModelRole.QUICK_ANALYSIS],
+        "features": [ModelFeature.TOOL_CALLING, ModelFeature.REASONING, ModelFeature.FAST_RESPONSE],
+        "recommended_depths": ["快速", "基础", "标准"],
+        "performance_metrics": {"speed": 5, "cost": 3, "quality": 4},
+        "description": "GPT-5.4 Mini，适合快速分析、工具调用和低延迟任务"
+    },
+    "codex-gpt-5.4": {
         "capability_level": 5,
         "suitable_roles": [ModelRole.BOTH],
         "features": [ModelFeature.TOOL_CALLING, ModelFeature.REASONING, ModelFeature.LONG_CONTEXT],

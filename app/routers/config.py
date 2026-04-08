@@ -17,7 +17,8 @@ from app.models.config import (
     LLMProvider, LLMProviderRequest, LLMProviderResponse,
     MarketCategory, MarketCategoryRequest, DataSourceGrouping,
     DataSourceGroupingRequest, DataSourceOrderRequest,
-    ModelCatalog, ModelInfo
+    ModelCatalog, ModelInfo, infer_codex_exec_model_name, infer_codex_capability_model_name,
+    CODEX_DEFAULT_MODEL_NAME, CODEX_DEEP_MODEL_NAME
 )
 from app.services.config_service import config_service
 from datetime import datetime
@@ -35,7 +36,10 @@ logger = logging.getLogger("webapi")
 
 def _get_codex_capability_defaults(model_name: str) -> Dict[str, Any]:
     """获取 Codex 模型的默认能力元数据。"""
-    defaults = DEFAULT_MODEL_CAPABILITIES.get(model_name) or DEFAULT_MODEL_CAPABILITIES["gpt-5.4"]
+    model_name = infer_codex_capability_model_name(model_name)
+    if not model_name:
+        raise ValueError("无法推断 Codex 模型名称，无法获取能力默认值")
+    defaults = DEFAULT_MODEL_CAPABILITIES.get(model_name) or DEFAULT_MODEL_CAPABILITIES[CODEX_DEEP_MODEL_NAME]
     return {
         "capability_level": defaults["capability_level"],
         "suitable_roles": [role.value for role in defaults["suitable_roles"]],
@@ -43,6 +47,15 @@ def _get_codex_capability_defaults(model_name: str) -> Dict[str, Any]:
         "recommended_depths": list(defaults["recommended_depths"]),
         "performance_metrics": defaults["performance_metrics"]
     }
+
+
+def _normalize_codex_reasoning_effort(reasoning_effort: Any) -> str:
+    """规整 Codex 推理强度，未提供时固定回落到 medium。"""
+    normalized = str(reasoning_effort or "").strip()
+    if normalized:
+        return normalized
+
+    return "medium"
 
 
 # ===== 配置重载端点 =====
@@ -644,19 +657,29 @@ async def add_llm_config(
                 llm_config_data['api_key'] = ""
 
         if str(llm_config_data.get("provider", "")).lower() == "codex":
+            if not infer_codex_exec_model_name(llm_config_data.get("model_name")):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="无法推断 Codex 模型名称，请确保 model_name 字段正确设置为 Codex 模型（如 codex-gpt-5.4-mini 或 codex-gpt-5.4）",
+                )
             llm_config_data["api_key"] = ""
             llm_config_data["api_base"] = ""
-            llm_config_data["max_tokens"] = 4000
+            if llm_config_data.get("max_tokens") in (None, ""):
+                llm_config_data["max_tokens"] = 32000
             llm_config_data["temperature"] = 0.7
-            llm_config_data["timeout"] = 180
-            llm_config_data["retry_times"] = 3
-            llm_config_data["reasoning_effort"] = llm_config_data.get("reasoning_effort") or None
+            if llm_config_data.get("timeout") in (None, ""):
+                llm_config_data["timeout"] = 300
+            if llm_config_data.get("retry_times") in (None, ""):
+                llm_config_data["retry_times"] = 3
+            llm_config_data["reasoning_effort"] = _normalize_codex_reasoning_effort(
+                llm_config_data.get("reasoning_effort")
+            )
             llm_config_data["fast_mode"] = bool(llm_config_data.get("fast_mode", False))
             llm_config_data["ask_for_approval"] = llm_config_data.get("ask_for_approval") or "never"
             llm_config_data["sandbox_mode"] = llm_config_data.get("sandbox_mode") or "read-only"
 
             codex_capability_defaults = _get_codex_capability_defaults(
-                llm_config_data.get("model_name") or "gpt-5.4"
+                llm_config_data.get("model_name") or CODEX_DEEP_MODEL_NAME
             )
             if llm_config_data.get("capability_level") is None:
                 llm_config_data["capability_level"] = codex_capability_defaults["capability_level"]

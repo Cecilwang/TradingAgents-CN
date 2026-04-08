@@ -3,6 +3,7 @@
 """测试模型配置修复"""
 
 from app.core.unified_config import unified_config
+from app.models.config import CODEX_DEFAULT_MODEL_NAME, CODEX_DEEP_MODEL_NAME
 
 print("=" * 80)
 print("🧪 测试模型配置读取")
@@ -25,8 +26,8 @@ print(f"  - quick_analysis_model: {quick_model}")
 print(f"  - deep_analysis_model: {deep_model}")
 
 # 3. 验证结果
-expected_quick = "gpt-5.4"
-expected_deep = "gpt-5.4"
+expected_quick = CODEX_DEFAULT_MODEL_NAME
+expected_deep = CODEX_DEEP_MODEL_NAME
 
 if quick_model == expected_quick and deep_model == expected_deep:
     print(f"\n🎉 测试通过！模型配置正确:")

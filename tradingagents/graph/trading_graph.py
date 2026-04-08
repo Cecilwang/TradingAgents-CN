@@ -44,10 +44,10 @@ def _build_codex_cli_options(
 ) -> Dict[str, Any]:
     """将运行时模型配置转换为 Codex CLI 适配器参数。"""
     config = model_config or {}
-    reasoning_effort = config.get("reasoning_effort")
+    reasoning_effort = str(config.get("reasoning_effort") or "").strip()
 
-    if isinstance(reasoning_effort, str):
-        reasoning_effort = reasoning_effort.strip() or None
+    if not reasoning_effort:
+        reasoning_effort = "medium"
 
     return {
         "request_timeout": config.get("timeout", timeout),

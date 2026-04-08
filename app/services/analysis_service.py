@@ -37,7 +37,7 @@ from app.services.redis_progress_tracker import RedisProgressTracker
 from app.services.config_provider import provider as config_provider
 from app.services.queue import DEFAULT_USER_CONCURRENT_LIMIT, GLOBAL_CONCURRENT_LIMIT, VISIBILITY_TIMEOUT_SECONDS
 from app.services.usage_statistics_service import UsageStatisticsService
-from app.models.config import UsageRecord
+from app.models.config import UsageRecord, CODEX_DEFAULT_MODEL_NAME, CODEX_DEEP_MODEL_NAME
 
 import logging
 logger = logging.getLogger(__name__)
@@ -143,7 +143,11 @@ class AnalysisService:
                                 "temperature": llm_config.get("temperature", 0.7),
                                 "timeout": llm_config.get("timeout", 180),
                                 "retry_times": llm_config.get("retry_times", 3),
-                                "api_base": llm_config.get("api_base")
+                                "api_base": llm_config.get("api_base"),
+                                "reasoning_effort": llm_config.get("reasoning_effort"),
+                                "fast_mode": llm_config.get("fast_mode", False),
+                                "ask_for_approval": llm_config.get("ask_for_approval"),
+                                "sandbox_mode": llm_config.get("sandbox_mode")
                             }
                             logger.info(f"✅ 读取快速模型配置: {quick_model}")
                             logger.info(f"   max_tokens={quick_model_config['max_tokens']}, temperature={quick_model_config['temperature']}")
@@ -156,7 +160,11 @@ class AnalysisService:
                                 "temperature": llm_config.get("temperature", 0.7),
                                 "timeout": llm_config.get("timeout", 180),
                                 "retry_times": llm_config.get("retry_times", 3),
-                                "api_base": llm_config.get("api_base")
+                                "api_base": llm_config.get("api_base"),
+                                "reasoning_effort": llm_config.get("reasoning_effort"),
+                                "fast_mode": llm_config.get("fast_mode", False),
+                                "ask_for_approval": llm_config.get("ask_for_approval"),
+                                "sandbox_mode": llm_config.get("sandbox_mode")
                             }
                             logger.info(f"✅ 读取深度模型配置: {deep_model} - {deep_model_config}")
                 else:
@@ -271,7 +279,11 @@ class AnalysisService:
                                 "temperature": llm_config.get("temperature", 0.7),
                                 "timeout": llm_config.get("timeout", 180),
                                 "retry_times": llm_config.get("retry_times", 3),
-                                "api_base": llm_config.get("api_base")
+                                "api_base": llm_config.get("api_base"),
+                                "reasoning_effort": llm_config.get("reasoning_effort"),
+                                "fast_mode": llm_config.get("fast_mode", False),
+                                "ask_for_approval": llm_config.get("ask_for_approval"),
+                                "sandbox_mode": llm_config.get("sandbox_mode")
                             }
                             logger.info(f"✅ 读取快速模型配置: {quick_model}")
                             logger.info(f"   max_tokens={quick_model_config['max_tokens']}, temperature={quick_model_config['temperature']}")
@@ -284,7 +296,11 @@ class AnalysisService:
                                 "temperature": llm_config.get("temperature", 0.7),
                                 "timeout": llm_config.get("timeout", 180),
                                 "retry_times": llm_config.get("retry_times", 3),
-                                "api_base": llm_config.get("api_base")
+                                "api_base": llm_config.get("api_base"),
+                                "reasoning_effort": llm_config.get("reasoning_effort"),
+                                "fast_mode": llm_config.get("fast_mode", False),
+                                "ask_for_approval": llm_config.get("ask_for_approval"),
+                                "sandbox_mode": llm_config.get("sandbox_mode")
                             }
                             logger.info(f"✅ 读取深度模型配置: {deep_model} - {deep_model_config}")
                 else:
@@ -392,7 +408,7 @@ class AnalysisService:
                 deep_model = getattr(task.parameters, 'deep_analysis_model', None)
 
                 # 优先使用深度分析模型，如果没有则使用快速分析模型
-                model_name = deep_model or quick_model or "gpt-5.4"
+                model_name = deep_model or quick_model or CODEX_DEEP_MODEL_NAME
 
                 # 根据模型名称确定供应商
                 from app.services.simple_analysis_service import get_provider_by_model_name
@@ -454,9 +470,9 @@ class AnalysisService:
             # 填充分析参数中的模型（若请求未显式提供）
             params = request.parameters or AnalysisParameters()
             if not getattr(params, 'quick_analysis_model', None):
-                params.quick_analysis_model = effective_settings.get("quick_analysis_model", "gpt-5.4")
+                params.quick_analysis_model = effective_settings.get("quick_analysis_model", CODEX_DEFAULT_MODEL_NAME)
             if not getattr(params, 'deep_analysis_model', None):
-                params.deep_analysis_model = effective_settings.get("deep_analysis_model", "gpt-5.4")
+                params.deep_analysis_model = effective_settings.get("deep_analysis_model", CODEX_DEEP_MODEL_NAME)
 
             # 应用系统级并发与可见性超时（若提供）
             try:
@@ -532,9 +548,9 @@ class AnalysisService:
 
             params = request.parameters or AnalysisParameters()
             if not getattr(params, 'quick_analysis_model', None):
-                params.quick_analysis_model = effective_settings.get("quick_analysis_model", "gpt-5.4")
+                params.quick_analysis_model = effective_settings.get("quick_analysis_model", CODEX_DEFAULT_MODEL_NAME)
             if not getattr(params, 'deep_analysis_model', None):
-                params.deep_analysis_model = effective_settings.get("deep_analysis_model", "gpt-5.4")
+                params.deep_analysis_model = effective_settings.get("deep_analysis_model", CODEX_DEEP_MODEL_NAME)
 
             try:
                 self.queue_service.user_concurrent_limit = int(effective_settings.get("max_concurrent_tasks", DEFAULT_USER_CONCURRENT_LIMIT))
@@ -646,7 +662,11 @@ class AnalysisService:
                         "temperature": llm_config.temperature,
                         "timeout": llm_config.timeout,
                         "retry_times": llm_config.retry_times,
-                        "api_base": llm_config.api_base
+                        "api_base": llm_config.api_base,
+                        "reasoning_effort": llm_config.reasoning_effort,
+                        "fast_mode": llm_config.fast_mode,
+                        "ask_for_approval": llm_config.ask_for_approval,
+                        "sandbox_mode": llm_config.sandbox_mode
                     }
 
                 if llm_config.model_name == deep_model:
@@ -655,7 +675,11 @@ class AnalysisService:
                         "temperature": llm_config.temperature,
                         "timeout": llm_config.timeout,
                         "retry_times": llm_config.retry_times,
-                        "api_base": llm_config.api_base
+                        "api_base": llm_config.api_base,
+                        "reasoning_effort": llm_config.reasoning_effort,
+                        "fast_mode": llm_config.fast_mode,
+                        "ask_for_approval": llm_config.ask_for_approval,
+                        "sandbox_mode": llm_config.sandbox_mode
                     }
 
             # 根据模型名称动态查找供应商

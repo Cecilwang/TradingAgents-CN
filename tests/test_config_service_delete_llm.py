@@ -1,6 +1,6 @@
 import asyncio
 
-from app.models.config import LLMConfig, SystemConfig
+from app.models.config import LLMConfig, SystemConfig, CODEX_DEEP_MODEL_NAME
 from app.services.config_service import ConfigService
 
 
@@ -13,7 +13,7 @@ def test_delete_llm_config_accepts_string_provider(monkeypatch):
             config_name="test",
             config_type="system",
             llm_configs=[
-                LLMConfig(provider="codex", model_name="gpt-5.4"),
+                LLMConfig(provider="codex", model_name=CODEX_DEEP_MODEL_NAME),
                 LLMConfig(provider="dashscope", model_name="qwen-plus"),
             ],
         )
@@ -29,7 +29,7 @@ def test_delete_llm_config_accepts_string_provider(monkeypatch):
         monkeypatch.setattr(service, "get_system_config", mock_get_system_config)
         monkeypatch.setattr(service, "save_system_config", mock_save_system_config)
 
-        result = await service.delete_llm_config("codex", "gpt-5.4")
+        result = await service.delete_llm_config("codex", CODEX_DEEP_MODEL_NAME)
 
         assert result is True
         assert len(config.llm_configs) == 1
@@ -48,7 +48,7 @@ def test_delete_llm_config_returns_false_when_model_missing(monkeypatch):
         config = SystemConfig(
             config_name="test",
             config_type="system",
-            llm_configs=[LLMConfig(provider="codex", model_name="gpt-5.4")],
+            llm_configs=[LLMConfig(provider="codex", model_name=CODEX_DEEP_MODEL_NAME)],
         )
         save_called = False
 

@@ -12808,17 +12808,61 @@
           },
           {
             "provider": "codex",
-            "model_name": "gpt-5.4",
-            "model_display_name": "gpt-5.4",
+            "model_name": "codex-gpt-5.4-mini",
+            "model_display_name": "codex-gpt-5.4-mini",
             "api_key": "",
             "api_base": "",
-            "max_tokens": 4000,
+            "max_tokens": 32000,
             "temperature": 0.7,
-            "timeout": 180,
+            "timeout": 300,
             "retry_times": 3,
             "enabled": true,
             "description": "",
-            "reasoning_effort": null,
+            "reasoning_effort": "medium",
+            "fast_mode": false,
+            "ask_for_approval": "never",
+            "sandbox_mode": "read-only",
+            "model_category": "",
+            "custom_endpoint": null,
+            "enable_memory": false,
+            "enable_debug": false,
+            "priority": 0,
+            "input_price_per_1k": null,
+            "output_price_per_1k": null,
+            "currency": "CNY",
+            "capability_level": 4,
+            "suitable_roles": [
+              "quick_analysis"
+            ],
+            "features": [
+              "tool_calling",
+              "reasoning",
+              "fast_response"
+            ],
+            "recommended_depths": [
+              "快速",
+              "基础",
+              "标准"
+            ],
+            "performance_metrics": {
+              "speed": 5,
+              "cost": 3,
+              "quality": 4
+            }
+          },
+          {
+            "provider": "codex",
+            "model_name": "codex-gpt-5.4",
+            "model_display_name": "codex-gpt-5.4",
+            "api_key": "",
+            "api_base": "",
+            "max_tokens": 32000,
+            "temperature": 0.7,
+            "timeout": 300,
+            "retry_times": 3,
+            "enabled": true,
+            "description": "",
+            "reasoning_effort": "medium",
             "fast_mode": false,
             "ask_for_approval": "never",
             "sandbox_mode": "read-only",
@@ -12851,7 +12895,7 @@
             }
           }
         ],
-        "default_llm": "qwen3-max",
+        "default_llm": "codex-gpt-5.4-mini",
         "data_source_configs": [
           {
             "name": "AKShare",
@@ -13015,13 +13059,13 @@
           "cache_ttl": 3600,
           "log_level": "INFO",
           "enable_monitoring": true,
-          "default_provider": "dashscope",
-          "default_model": "qwen-turbo",
+          "default_provider": "codex",
+          "default_model": "codex-gpt-5.4-mini",
           "enable_cost_tracking": true,
           "cost_alert_threshold": 100,
           "currency_preference": "CNY",
-          "quick_analysis_model": "qwen-flash",
-          "deep_analysis_model": "qwen-plus",
+          "quick_analysis_model": "codex-gpt-5.4-mini",
+          "deep_analysis_model": "codex-gpt-5.4",
           "worker_heartbeat_interval_seconds": 30,
           "queue_poll_interval_seconds": 1,
           "queue_cleanup_interval_seconds": 60,
@@ -14629,8 +14673,21 @@
         "provider_name": "Codex CLI",
         "models": [
           {
-            "name": "gpt-5.4",
-            "display_name": "gpt-5.4",
+            "name": "codex-gpt-5.4-mini",
+            "display_name": "codex-gpt-5.4-mini",
+            "description": "适合快速分析、低延迟任务和轻量工具调用",
+            "context_length": null,
+            "max_tokens": null,
+            "input_price_per_1k": null,
+            "output_price_per_1k": null,
+            "currency": "CNY",
+            "is_deprecated": false,
+            "release_date": null,
+            "capabilities": []
+          },
+          {
+            "name": "codex-gpt-5.4",
+            "display_name": "codex-gpt-5.4",
             "description": "适合复杂推理与更高质量的分析任务",
             "context_length": null,
             "max_tokens": null,

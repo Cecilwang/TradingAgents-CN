@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-将分析默认模型迁移到 gpt-5.4
+将分析默认模型迁移到 Codex 默认配置键
 """
 
 import asyncio
@@ -10,14 +10,17 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from app.core.config import settings
 from app.core.unified_config import unified_config
+from app.models.config import CODEX_DEFAULT_MODEL_NAME, CODEX_DEEP_MODEL_NAME
 
-TARGET_MODEL = "gpt-5.4"
+TARGET_QUICK_MODEL = CODEX_DEFAULT_MODEL_NAME
+TARGET_DEEP_MODEL = CODEX_DEEP_MODEL_NAME
 LEGACY_MODELS = {
     "qwen-flash",
     "qwen-turbo",
     "qwen-plus",
     "qwen-max",
     "qwen3-max",
+    "gpt-5.4",
 }
 
 
@@ -32,18 +35,20 @@ def migrate_settings_dict(system_settings: dict[str, Any]) -> tuple[dict[str, An
     updated_settings = dict(system_settings or {})
     changed_fields: dict[str, tuple[Any, Any]] = {}
 
-    for field_name in (
-        "quick_analysis_model",
-        "deep_analysis_model",
-        "quick_think_llm",
-        "deep_think_llm",
-        "default_model",
-    ):
+    target_models = {
+        "quick_analysis_model": TARGET_QUICK_MODEL,
+        "quick_think_llm": TARGET_QUICK_MODEL,
+        "default_model": TARGET_QUICK_MODEL,
+        "deep_analysis_model": TARGET_DEEP_MODEL,
+        "deep_think_llm": TARGET_DEEP_MODEL,
+    }
+
+    for field_name, target_model in target_models.items():
         current_value = updated_settings.get(field_name)
         if should_migrate(current_value):
-            updated_settings[field_name] = TARGET_MODEL
-            if current_value != TARGET_MODEL:
-                changed_fields[field_name] = (current_value, TARGET_MODEL)
+            updated_settings[field_name] = target_model
+            if current_value != target_model:
+                changed_fields[field_name] = (current_value, target_model)
 
     return updated_settings, changed_fields
 
@@ -61,7 +66,7 @@ async def migrate_database_settings() -> int:
             migrated_settings, changed_fields = migrate_settings_dict(system_settings)
 
             if not changed_fields:
-                print(f"⏭️ 跳过文档 {system_config.get('_id')}，分析模型已是 {TARGET_MODEL}")
+                print(f"⏭️ 跳过文档 {system_config.get('_id')}，分析模型已是目标配置键")
                 continue
 
             print(f"\n📝 更新 system_configs 文档 {system_config.get('_id')}:")
@@ -92,7 +97,7 @@ def migrate_json_settings() -> bool:
     migrated_settings, changed_fields = migrate_settings_dict(current_settings)
 
     if not changed_fields:
-        print(f"\n⏭️ 跳过 config/settings.json，分析模型已是 {TARGET_MODEL}")
+        print("\n⏭️ 跳过 config/settings.json，分析模型已是目标配置键")
         return False
 
     print(f"\n📝 更新 config/settings.json:")
@@ -107,7 +112,7 @@ def migrate_json_settings() -> bool:
 async def main():
     """主函数"""
     print("=" * 60)
-    print("📊 迁移分析模型默认值到 gpt-5.4")
+    print("📊 迁移分析模型默认值到 Codex 配置键")
     print("=" * 60)
 
     try:
@@ -117,7 +122,8 @@ async def main():
         print(f"\n✅ 迁移完成")
         print(f"  - MongoDB 更新文档数: {updated_docs}")
         print(f"  - config/settings.json 已更新: {'是' if updated_json else '否'}")
-        print(f"  - 目标模型: {TARGET_MODEL}")
+        print(f"  - quick_analysis_model: {TARGET_QUICK_MODEL}")
+        print(f"  - deep_analysis_model: {TARGET_DEEP_MODEL}")
         print("\n⚠️ 如果 Web API 进程已在运行，config_provider 可能会缓存旧值最多 60 秒；重启服务可立即生效。")
         print("\n" + "=" * 60)
 

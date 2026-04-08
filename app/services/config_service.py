@@ -15,7 +15,8 @@ from app.core.unified_config import unified_config
 from app.models.config import (
     SystemConfig, LLMConfig, DataSourceConfig, DatabaseConfig,
     ModelProvider, DataSourceType, DatabaseType, LLMProvider,
-    MarketCategory, DataSourceGrouping, ModelCatalog, ModelInfo
+    MarketCategory, DataSourceGrouping, ModelCatalog, ModelInfo,
+    CODEX_DEFAULT_MODEL_NAME, CODEX_DEEP_MODEL_NAME
 )
 from tradingagents.llm_adapters.codex_cli_adapter import get_codex_cli_status
 
@@ -407,6 +408,48 @@ class ConfigService:
             config_type="system",
             llm_configs=[
                 LLMConfig(
+                    provider=ModelProvider.CODEX,
+                    model_name=CODEX_DEFAULT_MODEL_NAME,
+                    model_display_name=CODEX_DEFAULT_MODEL_NAME,
+                    api_key="",
+                    api_base="",
+                    max_tokens=32000,
+                    temperature=0.7,
+                    timeout=300,
+                    retry_times=3,
+                    enabled=True,
+                    description="Codex CLI GPT-5.4 Mini 快速分析模型",
+                    reasoning_effort="medium",
+                    ask_for_approval="never",
+                    sandbox_mode="read-only",
+                    capability_level=4,
+                    suitable_roles=["quick_analysis"],
+                    features=["tool_calling", "reasoning", "fast_response"],
+                    recommended_depths=["快速", "基础", "标准"],
+                    performance_metrics={"speed": 5, "cost": 3, "quality": 4}
+                ),
+                LLMConfig(
+                    provider=ModelProvider.CODEX,
+                    model_name=CODEX_DEEP_MODEL_NAME,
+                    model_display_name=CODEX_DEEP_MODEL_NAME,
+                    api_key="",
+                    api_base="",
+                    max_tokens=32000,
+                    temperature=0.7,
+                    timeout=300,
+                    retry_times=3,
+                    enabled=True,
+                    description="Codex CLI GPT-5.4 深度分析模型",
+                    reasoning_effort="medium",
+                    ask_for_approval="never",
+                    sandbox_mode="read-only",
+                    capability_level=5,
+                    suitable_roles=["both"],
+                    features=["tool_calling", "reasoning", "long_context"],
+                    recommended_depths=["标准", "深度", "全面"],
+                    performance_metrics={"speed": 3, "cost": 2, "quality": 5}
+                ),
+                LLMConfig(
                     provider=ModelProvider.OPENAI,
                     model_name="gpt-3.5-turbo",
                     api_key="your-openai-api-key",
@@ -437,7 +480,7 @@ class ConfigService:
                     description="阿里云通义千问模型"
                 )
             ],
-            default_llm="glm-4",
+            default_llm=CODEX_DEFAULT_MODEL_NAME,
             data_source_configs=[
                 DataSourceConfig(
                     name="AKShare",
@@ -489,6 +532,10 @@ class ConfigService:
                 "cache_ttl": 3600,
                 "log_level": "INFO",
                 "enable_monitoring": True,
+                "default_provider": "codex",
+                "default_model": CODEX_DEFAULT_MODEL_NAME,
+                "quick_analysis_model": CODEX_DEFAULT_MODEL_NAME,
+                "deep_analysis_model": CODEX_DEEP_MODEL_NAME,
                 # Worker/Queue intervals
                 "worker_heartbeat_interval_seconds": 30,
                 "queue_poll_interval_seconds": 1.0,
@@ -2392,8 +2439,13 @@ class ConfigService:
                 "provider_name": "Codex CLI",
                 "models": [
                     {
-                        "name": "gpt-5.4",
-                        "display_name": "gpt-5.4",
+                        "name": CODEX_DEFAULT_MODEL_NAME,
+                        "display_name": CODEX_DEFAULT_MODEL_NAME,
+                        "description": "适合快速分析、低延迟任务和轻量工具调用"
+                    },
+                    {
+                        "name": CODEX_DEEP_MODEL_NAME,
+                        "display_name": CODEX_DEEP_MODEL_NAME,
                         "description": "适合复杂推理与更高质量的分析任务"
                     }
                 ]

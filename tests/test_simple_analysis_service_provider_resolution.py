@@ -1,6 +1,6 @@
 import asyncio
 
-from app.models.config import LLMConfig, SystemConfig
+from app.models.config import LLMConfig, SystemConfig, CODEX_DEEP_MODEL_NAME
 from app.services import simple_analysis_service
 
 
@@ -11,8 +11,8 @@ def test_get_provider_by_model_name_prefers_default_provider(monkeypatch):
             config_type="system",
             system_settings={"default_provider": "codex"},
             llm_configs=[
-                LLMConfig(provider="openai", model_name="gpt-5.4"),
-                LLMConfig(provider="codex", model_name="gpt-5.4"),
+                LLMConfig(provider="openai", model_name="gpt-4o"),
+                LLMConfig(provider="codex", model_name=CODEX_DEEP_MODEL_NAME),
             ],
         )
 
@@ -25,7 +25,7 @@ def test_get_provider_by_model_name_prefers_default_provider(monkeypatch):
             mock_get_system_config,
         )
 
-        provider = await simple_analysis_service.get_provider_by_model_name("gpt-5.4")
+        provider = await simple_analysis_service.get_provider_by_model_name(CODEX_DEEP_MODEL_NAME)
         assert provider == "codex"
 
     asyncio.run(run_test())
@@ -47,8 +47,8 @@ class _FakeSystemConfigsCollection:
             "is_active": True,
             "system_settings": {"default_provider": "codex"},
             "llm_configs": [
-                {"provider": "openai", "model_name": "gpt-5.4", "api_base": "https://api.openai.com/v1"},
-                {"provider": "codex", "model_name": "gpt-5.4", "api_base": "local://codex-cli"},
+                {"provider": "openai", "model_name": "gpt-4o", "api_base": "https://api.openai.com/v1"},
+                {"provider": "codex", "model_name": CODEX_DEEP_MODEL_NAME, "api_base": "local://codex-cli"},
             ],
         }
 
@@ -81,7 +81,7 @@ def test_get_provider_and_url_by_model_sync_prefers_default_provider(monkeypatch
         lambda _provider: None,
     )
 
-    provider_info = simple_analysis_service.get_provider_and_url_by_model_sync("gpt-5.4")
+    provider_info = simple_analysis_service.get_provider_and_url_by_model_sync(CODEX_DEEP_MODEL_NAME)
 
     assert provider_info["provider"] == "codex"
     assert provider_info["backend_url"] == "local://codex-cli"

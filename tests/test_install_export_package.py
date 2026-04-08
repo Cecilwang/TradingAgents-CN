@@ -13,7 +13,7 @@ def test_install_export_package_contains_codex_seed():
     codex_llms = [
         config
         for config in active_config.get("llm_configs", [])
-        if config.get("provider") == "codex" and config.get("model_name") == "gpt-5.4"
+        if config.get("provider") == "codex" and config.get("model_name") == "codex-gpt-5.4"
     ]
     codex_providers = [
         provider

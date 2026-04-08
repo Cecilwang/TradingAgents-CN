@@ -9,6 +9,7 @@ from enum import Enum
 from bson import ObjectId
 from .user import PyObjectId
 from app.utils.timezone import now_tz
+from app.models.config import CODEX_DEFAULT_MODEL_NAME, CODEX_DEEP_MODEL_NAME
 
 
 class AnalysisStatus(str, Enum):
@@ -49,8 +50,8 @@ class AnalysisParameters(BaseModel):
     include_risk: bool = True
     language: str = "zh-CN"
     # 模型配置
-    quick_analysis_model: Optional[str] = "gpt-5.4"
-    deep_analysis_model: Optional[str] = "gpt-5.4"
+    quick_analysis_model: Optional[str] = CODEX_DEFAULT_MODEL_NAME
+    deep_analysis_model: Optional[str] = CODEX_DEEP_MODEL_NAME
 
 
 class AnalysisResult(BaseModel):

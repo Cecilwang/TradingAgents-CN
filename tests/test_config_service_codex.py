@@ -1,6 +1,6 @@
 import asyncio
 
-from app.models.config import LLMConfig
+from app.models.config import LLMConfig, CODEX_DEEP_MODEL_NAME
 from app.services.config_service import ConfigService
 
 
@@ -27,7 +27,7 @@ def test_test_llm_config_uses_local_codex_cli_path(monkeypatch):
         result = await service.test_llm_config(
             LLMConfig(
                 provider="codex",
-                model_name="gpt-5.4",
+                model_name=CODEX_DEEP_MODEL_NAME,
                 api_key="",
                 api_base="",
             )

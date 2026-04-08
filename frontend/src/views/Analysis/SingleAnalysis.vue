@@ -784,8 +784,8 @@ const generateStepsFromBackend = (backendSteps: any[]) => {
 
 // 模型设置
 const modelSettings = ref({
-  quickAnalysisModel: 'gpt-5.4',
-  deepAnalysisModel: 'gpt-5.4'
+  quickAnalysisModel: 'codex-gpt-5.4-mini',
+  deepAnalysisModel: 'codex-gpt-5.4'
 })
 
 // 可用的模型列表（从配置中获取）
@@ -1900,8 +1900,8 @@ const initializeModelSettings = async () => {
     })))
   } catch (error) {
     console.error('加载默认模型配置失败:', error)
-    modelSettings.value.quickAnalysisModel = 'gpt-5.4'
-    modelSettings.value.deepAnalysisModel = 'gpt-5.4'
+    modelSettings.value.quickAnalysisModel = 'codex-gpt-5.4-mini'
+    modelSettings.value.deepAnalysisModel = 'codex-gpt-5.4'
   }
 }
 

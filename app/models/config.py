@@ -39,6 +39,36 @@ class ModelProvider(str, Enum):
     CUSTOM_AGGREGATOR = "custom_aggregator"  # 自定义聚合渠道
 
 
+CODEX_DEFAULT_MODEL_NAME = "codex-gpt-5.4-mini"
+CODEX_DEEP_MODEL_NAME = "codex-gpt-5.4"
+
+
+def infer_codex_exec_model_name(model_name: Optional[str]) -> Optional[str]:
+    """根据 Codex 配置键推断实际调用模型名。"""
+    normalized = str(model_name or "").strip()
+
+    if normalized.startswith(CODEX_DEFAULT_MODEL_NAME):
+        return "gpt-5.4-mini"
+
+    if normalized.startswith(CODEX_DEEP_MODEL_NAME):
+        return "gpt-5.4"
+
+    return None
+
+
+def infer_codex_capability_model_name(model_name: Optional[str]) -> Optional[str]:
+    """根据 Codex 配置键推断能力配置键。"""
+    normalized = str(model_name or "").strip()
+
+    if normalized.startswith(CODEX_DEFAULT_MODEL_NAME):
+        return CODEX_DEFAULT_MODEL_NAME
+
+    if normalized.startswith(CODEX_DEEP_MODEL_NAME):
+        return CODEX_DEEP_MODEL_NAME
+
+    return normalized
+
+
 class LLMProvider(BaseModel):
     """大模型厂家配置"""
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
@@ -197,8 +227,8 @@ class LLMConfig(BaseModel):
     enabled: bool = Field(default=True, description="是否启用")
     description: Optional[str] = Field(None, description="配置描述")
     reasoning_effort: Optional[str] = Field(
-        default=None,
-        description="Codex CLI 推理强度（未设置时沿用本机 CLI 默认值）",
+        default="medium",
+        description="Codex CLI 推理强度",
     )
     fast_mode: bool = Field(
         default=False,
@@ -385,7 +415,7 @@ class LLMConfigRequest(BaseModel):
     retry_times: int = 3
     enabled: bool = True
     description: Optional[str] = None
-    reasoning_effort: Optional[str] = None
+    reasoning_effort: Optional[str] = "medium"
     fast_mode: bool = False
     ask_for_approval: str = "never"
     sandbox_mode: str = "read-only"

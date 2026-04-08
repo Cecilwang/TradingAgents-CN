@@ -62,7 +62,7 @@
           </el-option>
         </el-select>
         <div class="form-tip">
-          💡 从列表中选择模型，会自动填充下方的显示名称和模型代码
+          💡 从列表中选择模型，会自动填充下方的显示名称{{ isCodexProvider ? '和默认配置键' : '和模型代码' }}
         </div>
       </el-form-item>
 
@@ -76,13 +76,13 @@
         </div>
       </el-form-item>
 
-      <el-form-item label="模型代码" prop="model_name">
+      <el-form-item :label="isCodexProvider ? '配置键' : '模型代码'" prop="model_name">
         <el-input
           v-model="formData.model_name"
-          placeholder="输入模型的API调用代码，如：qwen-turbo"
+          :placeholder="isCodexProvider ? '输入配置键，如：codex-gpt-5.4-mini' : '输入模型的API调用代码，如：qwen-turbo'"
         />
         <div class="form-tip">
-          💡 实际调用API时使用的模型标识符
+          {{ isCodexProvider ? '💡 用于区分不同 Codex 配置的唯一键，不直接作为实际调用模型名' : '💡 实际调用API时使用的模型标识符' }}
         </div>
       </el-form-item>
 
@@ -96,10 +96,166 @@
         </div>
       </el-form-item>
 
-      <!-- 模型参数 -->
-      <el-divider content-position="left">{{ isCodexProvider ? 'Codex CLI 配置' : '模型参数' }}</el-divider>
-
       <template v-if="isCodexProvider">
+        <el-divider content-position="left">模型能力配置</el-divider>
+
+        <el-form-item label="能力等级" prop="capability_level">
+          <el-select
+            v-model="formData.capability_level"
+            placeholder="选择模型能力等级"
+          >
+            <el-option :value="1" label="1级 - 基础模型（快速分析）">
+              <span>1级 - 基础模型</span>
+              <span class="text-gray-400 text-xs ml-2">适合快速分析和简单任务</span>
+            </el-option>
+            <el-option :value="2" label="2级 - 标准模型（日常使用）">
+              <span>2级 - 标准模型</span>
+              <span class="text-gray-400 text-xs ml-2">适合日常分析和常规任务</span>
+            </el-option>
+            <el-option :value="3" label="3级 - 高级模型（深度分析）">
+              <span>3级 - 高级模型</span>
+              <span class="text-gray-400 text-xs ml-2">适合深度分析和复杂推理</span>
+            </el-option>
+            <el-option :value="4" label="4级 - 专业模型（专业分析）">
+              <span>4级 - 专业模型</span>
+              <span class="text-gray-400 text-xs ml-2">适合专业级分析和多轮辩论</span>
+            </el-option>
+            <el-option :value="5" label="5级 - 旗舰模型（全面分析）">
+              <span>5级 - 旗舰模型</span>
+              <span class="text-gray-400 text-xs ml-2">最强能力，适合全面分析</span>
+            </el-option>
+          </el-select>
+          <div class="form-tip">
+            💡 能力等级决定模型可以处理的分析深度上限
+          </div>
+        </el-form-item>
+
+        <el-form-item label="适用角色" prop="suitable_roles">
+          <el-select
+            v-model="formData.suitable_roles"
+            multiple
+            placeholder="选择模型适用的角色"
+            style="width: 100%"
+          >
+            <el-option value="quick_analysis" label="快速分析">
+              <span>快速分析</span>
+              <span class="text-gray-400 text-xs ml-2">数据收集、工具调用</span>
+            </el-option>
+            <el-option value="deep_analysis" label="深度分析">
+              <span>深度分析</span>
+              <span class="text-gray-400 text-xs ml-2">推理、决策</span>
+            </el-option>
+            <el-option value="both" label="两者都适合">
+              <span>两者都适合</span>
+              <span class="text-gray-400 text-xs ml-2">全能型模型</span>
+            </el-option>
+          </el-select>
+          <div class="form-tip">
+            💡 快速分析侧重数据收集，深度分析侧重推理决策
+          </div>
+        </el-form-item>
+
+        <el-form-item label="推荐分析深度" prop="recommended_depths">
+          <el-select
+            v-model="formData.recommended_depths"
+            multiple
+            placeholder="选择推荐的分析深度级别"
+            style="width: 100%"
+          >
+            <el-option value="快速" label="快速（1级）">
+              <span>快速（1级）</span>
+              <span class="text-gray-400 text-xs ml-2">任何模型都可以</span>
+            </el-option>
+            <el-option value="基础" label="基础（2级）">
+              <span>基础（2级）</span>
+              <span class="text-gray-400 text-xs ml-2">基础级以上</span>
+            </el-option>
+            <el-option value="标准" label="标准（3级）">
+              <span>标准（3级）</span>
+              <span class="text-gray-400 text-xs ml-2">标准级以上</span>
+            </el-option>
+            <el-option value="深度" label="深度（4级）">
+              <span>深度（4级）</span>
+              <span class="text-gray-400 text-xs ml-2">高级以上，需推理能力</span>
+            </el-option>
+            <el-option value="全面" label="全面（5级）">
+              <span>全面（5级）</span>
+              <span class="text-gray-400 text-xs ml-2">专业级以上，强推理能力</span>
+            </el-option>
+          </el-select>
+          <div class="form-tip">
+            💡 根据模型能力等级，系统会自动推荐合适的分析深度
+          </div>
+        </el-form-item>
+
+        <el-form-item label="模型特性" prop="features">
+          <el-select
+            v-model="formData.features"
+            multiple
+            placeholder="选择模型支持的特性"
+            style="width: 100%"
+          >
+            <el-option value="tool_calling" label="工具调用">
+              <span>工具调用</span>
+              <span class="text-gray-400 text-xs ml-2">必需特性</span>
+            </el-option>
+            <el-option value="long_context" label="长上下文">
+              <span>长上下文</span>
+              <span class="text-gray-400 text-xs ml-2">支持大量历史信息</span>
+            </el-option>
+            <el-option value="reasoning" label="强推理能力">
+              <span>强推理能力</span>
+              <span class="text-gray-400 text-xs ml-2">深度分析必需</span>
+            </el-option>
+            <el-option value="vision" label="视觉输入">
+              <span>视觉输入</span>
+              <span class="text-gray-400 text-xs ml-2">支持图表分析</span>
+            </el-option>
+            <el-option value="fast_response" label="快速响应">
+              <span>快速响应</span>
+              <span class="text-gray-400 text-xs ml-2">响应速度快</span>
+            </el-option>
+            <el-option value="cost_effective" label="成本效益高">
+              <span>成本效益高</span>
+              <span class="text-gray-400 text-xs ml-2">性价比高</span>
+            </el-option>
+          </el-select>
+          <div class="form-tip">
+            💡 工具调用是必需特性，推理能力对深度分析很重要
+          </div>
+        </el-form-item>
+
+        <el-divider content-position="left">模型参数</el-divider>
+
+        <el-form-item label="最大Token数" prop="max_tokens">
+          <el-input-number
+            v-model="formData.max_tokens"
+            :min="100"
+            :max="32000"
+            :step="100"
+          />
+        </el-form-item>
+
+        <el-form-item label="超时时间" prop="timeout">
+          <el-input-number
+            v-model="formData.timeout"
+            :min="10"
+            :max="300"
+            :step="10"
+          />
+          <span class="ml-2 text-gray-500">秒</span>
+        </el-form-item>
+
+        <el-form-item label="重试次数" prop="retry_times">
+          <el-input-number
+            v-model="formData.retry_times"
+            :min="0"
+            :max="10"
+          />
+        </el-form-item>
+
+        <el-divider content-position="left">Codex CLI 配置</el-divider>
+
         <el-form-item label="推理强度" prop="reasoning_effort">
           <el-select
             v-model="formData.reasoning_effort"
@@ -141,6 +297,8 @@
       </template>
 
       <template v-else>
+        <el-divider content-position="left">模型参数</el-divider>
+
         <el-form-item label="最大Token数" prop="max_tokens">
           <el-input-number
             v-model="formData.max_tokens"
@@ -219,24 +377,24 @@
         <el-switch v-model="formData.enabled" />
       </el-form-item>
 
+      <el-form-item label="启用记忆功能">
+        <el-switch v-model="formData.enable_memory" />
+      </el-form-item>
+
+      <el-form-item label="启用调试模式">
+        <el-switch v-model="formData.enable_debug" />
+      </el-form-item>
+
+      <el-form-item label="优先级" prop="priority">
+        <el-input-number
+          v-model="formData.priority"
+          :min="0"
+          :max="100"
+        />
+        <span class="ml-2 text-gray-500">数值越大优先级越高</span>
+      </el-form-item>
+
       <template v-if="!isCodexProvider">
-        <el-form-item label="启用记忆功能">
-          <el-switch v-model="formData.enable_memory" />
-        </el-form-item>
-
-        <el-form-item label="启用调试模式">
-          <el-switch v-model="formData.enable_debug" />
-        </el-form-item>
-
-        <el-form-item label="优先级" prop="priority">
-          <el-input-number
-            v-model="formData.priority"
-            :min="0"
-            :max="100"
-          />
-          <span class="ml-2 text-gray-500">数值越大优先级越高</span>
-        </el-form-item>
-
         <el-form-item label="模型类别" prop="model_category">
           <el-input
             v-model="formData.model_category"
@@ -255,7 +413,7 @@
       </el-form-item>
 
       <!-- 🆕 模型能力配置 -->
-      <template>
+      <template v-if="!isCodexProvider">
         <el-divider content-position="left">模型能力配置</el-divider>
 
       <el-form-item label="能力等级" prop="capability_level">
@@ -381,6 +539,7 @@
         </div>
       </el-form-item>
       </template>
+
     </el-form>
 
     <template #footer>
@@ -515,7 +674,7 @@ const selectedModelKey = ref<string>('')
 // 表单验证规则
 const rules: FormRules = {
   provider: [{ required: true, message: '请选择供应商', trigger: 'change' }],
-  model_name: [{ required: true, message: '请输入模型名称', trigger: 'blur' }],
+  model_name: [{ required: true, message: '请输入模型代码或配置键', trigger: 'blur' }],
   priority: [{ required: true, message: '请输入优先级', trigger: 'blur' }]
 }
 
@@ -538,6 +697,30 @@ interface ModelInfo {
 }
 
 const modelCatalog = ref<Record<string, Array<ModelInfo>>>({})
+
+const inferCodexExecModelName = (modelName?: string) => {
+  if (!modelName) {
+    return ''
+  }
+
+  if (modelName.startsWith('codex-gpt-5.4-mini')) {
+    return 'gpt-5.4-mini'
+  }
+
+  if (modelName.startsWith('codex-gpt-5.4')) {
+    return 'gpt-5.4'
+  }
+
+  return modelName
+}
+
+const buildDefaultCodexConfigKey = (realModelName?: string) => {
+  if (!realModelName) {
+    return ''
+  }
+
+  return `codex-${realModelName}`
+}
 
 // 加载模型目录
 const loadModelCatalog = async () => {
@@ -590,11 +773,11 @@ const normalizeCodexFormData = (config: Partial<LLMConfig>) => {
     ...codexCapabilityDefaults,
     ...config,
     api_base: '',
-    max_tokens: 4000,
+    max_tokens: config.max_tokens ?? 32000,
     temperature: 0.7,
-    timeout: 180,
-    retry_times: 3,
-    reasoning_effort: config.reasoning_effort || '',
+    timeout: config.timeout ?? 300,
+    retry_times: config.retry_times ?? 3,
+    reasoning_effort: config.reasoning_effort || 'medium',
     fast_mode: Boolean(config.fast_mode),
     ask_for_approval: config.ask_for_approval || 'never',
     sandbox_mode: config.sandbox_mode || 'read-only',
@@ -648,8 +831,14 @@ const handleModelSelect = (modelCode: string) => {
   // 查找选中的模型信息
   const selectedModel = modelOptions.value.find(m => m.value === modelCode)
   if (selectedModel) {
-    // 自动填充模型代码和显示名称
-    formData.value.model_name = selectedModel.value
+    // Codex 的 model_name 作为配置键保留。
+    if (formData.value.provider === 'codex') {
+      if (!formData.value.model_name) {
+        formData.value.model_name = buildDefaultCodexConfigKey(selectedModel.value)
+      }
+    } else {
+      formData.value.model_name = selectedModel.value
+    }
     formData.value.model_display_name = selectedModel.label
 
     console.log('📋 选择模型:', {
@@ -692,8 +881,11 @@ watch(
       modelOptions.value = getModelOptions(config.provider)
 
       // 如果有 model_name，尝试在下拉列表中选中它
-      if (config.model_name) {
-        selectedModelKey.value = config.model_name
+      const selectedValue = config.provider === 'codex'
+        ? inferCodexExecModelName(config.model_name)
+        : config.model_name
+      if (selectedValue) {
+        selectedModelKey.value = selectedValue
       }
 
       console.log('📝 编辑模式加载配置:', formData.value)
@@ -722,8 +914,11 @@ watch(
         modelOptions.value = getModelOptions(props.config.provider)
 
         // 如果有 model_name，尝试在下拉列表中选中它
-        if (props.config.model_name) {
-          selectedModelKey.value = props.config.model_name
+        const selectedValue = props.config.provider === 'codex'
+          ? inferCodexExecModelName(props.config.model_name)
+          : props.config.model_name
+        if (selectedValue) {
+          selectedModelKey.value = selectedValue
         }
 
         console.log('📝 对话框打开，加载配置:', formData.value)

@@ -156,7 +156,7 @@ class ConfigMigrator:
             # 转换为新格式的系统设置
             system_settings = {
                 "default_provider": legacy_settings.get("default_provider", "dashscope"),
-                "default_model": legacy_settings.get("default_model", "gpt-5.4"),
+                "default_model": legacy_settings.get("default_model", "codex-gpt-5.4-mini"),
                 "enable_cost_tracking": legacy_settings.get("enable_cost_tracking", True),
                 "cost_alert_threshold": legacy_settings.get("cost_alert_threshold", 100.0),
                 "currency_preference": legacy_settings.get("currency_preference", "CNY"),

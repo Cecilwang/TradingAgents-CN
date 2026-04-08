@@ -4,7 +4,8 @@
 
 import { ApiClient } from './request'
 
-const ANALYSIS_DEFAULT_MODEL = 'gpt-5.4'
+const QUICK_ANALYSIS_DEFAULT_MODEL = 'codex-gpt-5.4-mini'
+const DEEP_ANALYSIS_DEFAULT_MODEL = 'codex-gpt-5.4'
 
 // 配置相关类型定义
 
@@ -436,8 +437,8 @@ export const configApi = {
   // 获取默认模型配置
   getDefaultModels(): Promise<{ quick_analysis_model: string; deep_analysis_model: string }> {
     return this.getSystemSettings().then(settings => ({
-      quick_analysis_model: settings.quick_analysis_model || ANALYSIS_DEFAULT_MODEL,
-      deep_analysis_model: settings.deep_analysis_model || ANALYSIS_DEFAULT_MODEL
+      quick_analysis_model: settings.quick_analysis_model || QUICK_ANALYSIS_DEFAULT_MODEL,
+      deep_analysis_model: settings.deep_analysis_model || DEEP_ANALYSIS_DEFAULT_MODEL
     }))
   },
 
@@ -597,7 +598,7 @@ export const validateLLMConfig = (config: Partial<LLMConfig>): string[] => {
   const isCodex = config.provider === 'codex'
 
   if (!config.provider) errors.push('供应商不能为空')
-  if (!config.model_name) errors.push('模型名称不能为空')
+  if (!config.model_name) errors.push(isCodex ? '配置键不能为空' : '模型名称不能为空')
   // 注意：API密钥不在这里验证，因为它是在厂家配置中管理的
   if (!isCodex && config.max_tokens && config.max_tokens <= 0) errors.push('最大Token数必须大于0')
   if (!isCodex && config.temperature !== undefined && (config.temperature < 0 || config.temperature > 2)) {

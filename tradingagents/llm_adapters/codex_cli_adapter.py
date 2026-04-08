@@ -84,14 +84,26 @@ def get_codex_cli_version(command: str = "codex") -> Optional[str]:
     return get_codex_cli_status(command)["version"]
 
 
+def infer_codex_exec_model_name(model_name: str) -> str:
+    """根据 Codex 配置键推断实际执行模型。"""
+    normalized = str(model_name or "").strip()
+    if not normalized or normalized.lower() in {"auto", "default"}:
+        raise ValueError("Codex 模型必须显式指定模型代码，不能使用 auto/default。")
+    if normalized.startswith("codex-gpt-5.4-mini"):
+        return "gpt-5.4-mini"
+    if normalized.startswith("codex-gpt-5.4"):
+        return "gpt-5.4"
+    return normalized
+
+
 class ChatCodexCLI(BaseChatModel):
     """基于本地 Codex CLI 的 LangChain ChatModel 适配器。"""
 
-    model_name: str = Field(default="gpt-5.4", alias="model")
+    model_name: str = Field(..., alias="model")
     codex_command: str = Field(default="codex")
     working_dir: str = Field(default_factory=_default_working_dir)
     request_timeout: int = Field(default=180)
-    reasoning_effort: Optional[str] = Field(default=None)
+    reasoning_effort: str = Field(default="medium")
     fast_mode: bool = Field(default=False)
     ask_for_approval: str = Field(default="never")
     temperature: float = Field(default=0.1)
@@ -950,12 +962,19 @@ class ChatCodexCLI(BaseChatModel):
             "-a",
             self.ask_for_approval,
         ]
-        command.extend(self._build_config_override_args())
+        command.extend(
+            [
+                "-c",
+                f"model_reasoning_effort={json.dumps(self.reasoning_effort)}",
+                "-c",
+                'service_tier="fast"' if self.fast_mode else 'service_tier="flex"',
+            ]
+        )
         command.append("exec")
         if json_output:
             command.append("--json")
-        if self.model_name and self.model_name != "auto":
-            command.extend(["-m", self.model_name])
+        exec_model_name = infer_codex_exec_model_name(self.model_name)
+        command.extend(["-m", exec_model_name])
         if self.working_dir:
             command.extend(["-C", self.working_dir, "--skip-git-repo-check"])
         command.extend(
@@ -1628,25 +1647,6 @@ class ChatCodexCLI(BaseChatModel):
                 continue
             except OSError:
                 logger.warning("⚠️ [Codex CLI] 临时文件清理失败: %s", temp_path)
-
-    def _build_config_override_args(self) -> List[str]:
-        """构造 Codex CLI 的 `-c key=value` 覆盖参数。"""
-        command_args: List[str] = []
-        reasoning_effort = (self.reasoning_effort or "").strip()
-
-        if reasoning_effort:
-            command_args.extend(
-                [
-                    "-c",
-                    f"model_reasoning_effort={json.dumps(reasoning_effort)}",
-                ]
-            )
-
-        if self.fast_mode:
-            # 仅在开启时强制覆盖为 fast；关闭时沿用本机 Codex CLI 默认配置。
-            command_args.extend(["-c", 'service_tier="fast"'])
-
-        return command_args
 
     def _parse_codex_response(
         self,

@@ -491,7 +491,8 @@ def _get_default_provider_by_model(model_name: str) -> str:
         'qwen-max-longcontext': 'dashscope',
 
         # OpenAI
-        'gpt-5.4': 'codex',
+        'codex-gpt-5.4': 'codex',
+        'codex-gpt-5.4-mini': 'codex',
         'gpt-3.5-turbo': 'openai',
         'gpt-4': 'openai',
         'gpt-4-turbo': 'openai',

@@ -49,7 +49,8 @@
       "说明": "可用的 LLM 模型目录",
       "数量": "16+ 个模型",
       "包含": [
-        "gpt-5.4 (Codex CLI)",
+        "codex-gpt-5.4 (Codex CLI)",
+        "codex-gpt-5.4-mini (Codex CLI)",
         "gpt-4o (OpenAI)",
         "gpt-4o-mini (OpenAI)",
         "qwen-plus (阿里百炼)",

@@ -13,7 +13,8 @@ from dataclasses import dataclass, asdict
 
 from app.models.config import (
     LLMConfig, DataSourceConfig, DatabaseConfig, SystemConfig,
-    ModelProvider, DataSourceType, DatabaseType
+    ModelProvider, DataSourceType, DatabaseType,
+    CODEX_DEFAULT_MODEL_NAME, CODEX_DEEP_MODEL_NAME
 )
 
 
@@ -124,6 +125,13 @@ class UnifiedConfigManager:
                     sandbox_mode=model.get("sandbox_mode", "read-only"),
                     enabled=model.get("enabled", True),
                     description=model.get("description") or f"{model.get('provider', '')} {model.get('model_name', '')}",
+                    model_category=model.get("model_category"),
+                    enable_memory=model.get("enable_memory", False),
+                    enable_debug=model.get("enable_debug", False),
+                    priority=model.get("priority", 0),
+                    input_price_per_1k=model.get("input_price_per_1k"),
+                    output_price_per_1k=model.get("output_price_per_1k"),
+                    currency=model.get("currency", "CNY"),
                     capability_level=model.get("capability_level", 2),
                     suitable_roles=model.get("suitable_roles", ["both"]),
                     features=model.get("features", []),
@@ -159,6 +167,13 @@ class UnifiedConfigManager:
                 "ask_for_approval": llm_config.ask_for_approval,
                 "sandbox_mode": llm_config.sandbox_mode,
                 "description": llm_config.description,
+                "model_category": llm_config.model_category,
+                "enable_memory": llm_config.enable_memory,
+                "enable_debug": llm_config.enable_debug,
+                "priority": llm_config.priority,
+                "input_price_per_1k": llm_config.input_price_per_1k,
+                "output_price_per_1k": llm_config.output_price_per_1k,
+                "currency": llm_config.currency,
                 "capability_level": llm_config.capability_level,
                 "suitable_roles": llm_config.suitable_roles,
                 "features": llm_config.features,
@@ -255,7 +270,7 @@ class UnifiedConfigManager:
         """获取默认模型（向后兼容）"""
         settings = self.get_system_settings()
         # 优先返回快速分析模型，保持向后兼容
-        return settings.get("quick_analysis_model", settings.get("default_model", "gpt-5.4"))
+        return settings.get("quick_analysis_model", settings.get("default_model", CODEX_DEFAULT_MODEL_NAME))
 
     def set_default_model(self, model_name: str) -> bool:
         """设置默认模型（向后兼容）"""
@@ -267,13 +282,13 @@ class UnifiedConfigManager:
         """获取快速分析模型"""
         settings = self.get_system_settings()
         # 优先读取新字段名，如果不存在则读取旧字段名（向后兼容）
-        return settings.get("quick_analysis_model") or settings.get("quick_think_llm", "gpt-5.4")
+        return settings.get("quick_analysis_model") or settings.get("quick_think_llm", CODEX_DEFAULT_MODEL_NAME)
 
     def get_deep_analysis_model(self) -> str:
         """获取深度分析模型"""
         settings = self.get_system_settings()
         # 优先读取新字段名，如果不存在则读取旧字段名（向后兼容）
-        return settings.get("deep_analysis_model") or settings.get("deep_think_llm", "gpt-5.4")
+        return settings.get("deep_analysis_model") or settings.get("deep_think_llm", CODEX_DEEP_MODEL_NAME)
 
     def set_analysis_models(self, quick_model: str, deep_model: str) -> bool:
         """设置分析模型"""
