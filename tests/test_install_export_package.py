@@ -29,3 +29,16 @@ def test_install_export_package_contains_codex_seed():
     assert len(codex_llms) == 1
     assert len(codex_providers) == 1
     assert len(codex_catalogs) == 1
+
+    codex_llm = codex_llms[0]
+    codex_catalog_models = codex_catalogs[0]["models"]
+    codex_catalog_model = next(
+        model for model in codex_catalog_models if model["name"] == "codex-gpt-5.4"
+    )
+
+    assert codex_llm["input_price_per_1k"] == 0.0025
+    assert codex_llm["output_price_per_1k"] == 0.015
+    assert codex_llm["currency"] == "USD"
+    assert codex_catalog_model["input_price_per_1k"] == 0.0025
+    assert codex_catalog_model["output_price_per_1k"] == 0.015
+    assert codex_catalog_model["currency"] == "USD"

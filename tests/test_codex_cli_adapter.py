@@ -823,7 +823,7 @@ def test_astream_falls_back_to_final_tool_calls(monkeypatch):
     assert message.tool_calls[0]["args"] == {"ticker": "META"}
 
 
-def test_default_model_catalog_contains_only_gpt_5_4_for_codex():
+def test_default_model_catalog_contains_codex_pricing_metadata():
     service = ConfigService()
 
     catalogs = service._get_default_model_catalog()
@@ -832,4 +832,13 @@ def test_default_model_catalog_contains_only_gpt_5_4_for_codex():
     )
 
     assert codex_catalog["provider_name"] == "Codex CLI"
-    assert [model["name"] for model in codex_catalog["models"]] == ["gpt-5.4"]
+    assert [model["name"] for model in codex_catalog["models"]] == [
+        "codex-gpt-5.4-mini",
+        "codex-gpt-5.4",
+    ]
+    assert codex_catalog["models"][0]["input_price_per_1k"] == 0.00075
+    assert codex_catalog["models"][0]["output_price_per_1k"] == 0.0045
+    assert codex_catalog["models"][0]["currency"] == "USD"
+    assert codex_catalog["models"][1]["input_price_per_1k"] == 0.0025
+    assert codex_catalog["models"][1]["output_price_per_1k"] == 0.015
+    assert codex_catalog["models"][1]["currency"] == "USD"

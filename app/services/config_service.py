@@ -22,6 +22,13 @@ from tradingagents.llm_adapters.codex_cli_adapter import get_codex_cli_status
 
 logger = logging.getLogger(__name__)
 
+CODEX_CONTEXT_LENGTH = 272000
+CODEX_MINI_INPUT_PRICE_PER_1K = 0.00075
+CODEX_MINI_OUTPUT_PRICE_PER_1K = 0.0045
+CODEX_DEEP_INPUT_PRICE_PER_1K = 0.0025
+CODEX_DEEP_OUTPUT_PRICE_PER_1K = 0.015
+CODEX_CURRENCY = "USD"
+
 
 class ConfigService:
     """配置管理服务类"""
@@ -426,7 +433,10 @@ class ConfigService:
                     suitable_roles=["quick_analysis"],
                     features=["tool_calling", "reasoning", "fast_response"],
                     recommended_depths=["快速", "基础", "标准"],
-                    performance_metrics={"speed": 5, "cost": 3, "quality": 4}
+                    performance_metrics={"speed": 5, "cost": 3, "quality": 4},
+                    input_price_per_1k=CODEX_MINI_INPUT_PRICE_PER_1K,
+                    output_price_per_1k=CODEX_MINI_OUTPUT_PRICE_PER_1K,
+                    currency=CODEX_CURRENCY,
                 ),
                 LLMConfig(
                     provider=ModelProvider.CODEX,
@@ -447,7 +457,10 @@ class ConfigService:
                     suitable_roles=["both"],
                     features=["tool_calling", "reasoning", "long_context"],
                     recommended_depths=["标准", "深度", "全面"],
-                    performance_metrics={"speed": 3, "cost": 2, "quality": 5}
+                    performance_metrics={"speed": 3, "cost": 2, "quality": 5},
+                    input_price_per_1k=CODEX_DEEP_INPUT_PRICE_PER_1K,
+                    output_price_per_1k=CODEX_DEEP_OUTPUT_PRICE_PER_1K,
+                    currency=CODEX_CURRENCY,
                 ),
                 LLMConfig(
                     provider=ModelProvider.OPENAI,
@@ -2441,13 +2454,21 @@ class ConfigService:
                     {
                         "name": CODEX_DEFAULT_MODEL_NAME,
                         "display_name": CODEX_DEFAULT_MODEL_NAME,
-                        "description": "适合快速分析、低延迟任务和轻量工具调用"
+                        "description": "适合快速分析、低延迟任务和轻量工具调用",
+                        "context_length": CODEX_CONTEXT_LENGTH,
+                        "input_price_per_1k": CODEX_MINI_INPUT_PRICE_PER_1K,
+                        "output_price_per_1k": CODEX_MINI_OUTPUT_PRICE_PER_1K,
+                        "currency": CODEX_CURRENCY,
                     },
                     {
                         "name": CODEX_DEEP_MODEL_NAME,
                         "display_name": CODEX_DEEP_MODEL_NAME,
-                        "description": "适合复杂推理与更高质量的分析任务"
-                    }
+                        "description": "适合复杂推理与更高质量的分析任务",
+                        "context_length": CODEX_CONTEXT_LENGTH,
+                        "input_price_per_1k": CODEX_DEEP_INPUT_PRICE_PER_1K,
+                        "output_price_per_1k": CODEX_DEEP_OUTPUT_PRICE_PER_1K,
+                        "currency": CODEX_CURRENCY,
+                    },
                 ]
             },
             {
@@ -2768,6 +2789,7 @@ class ConfigService:
                             "context_length": model.context_length,
                             "input_price_per_1k": model.input_price_per_1k,
                             "output_price_per_1k": model.output_price_per_1k,
+                            "currency": model.currency,
                             "is_deprecated": model.is_deprecated
                         }
                         for model in catalog.models

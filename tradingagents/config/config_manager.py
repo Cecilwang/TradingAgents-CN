@@ -26,6 +26,23 @@ from .usage_models import UsageRecord, ModelConfig, PricingConfig
 
 logger = get_logger('agents')
 
+_CODEX_PRICING_BY_MODEL = {
+    "codex-gpt-5.4-mini": (0.00075, 0.0045, "USD"),
+    "codex-gpt-5.4": (0.0025, 0.015, "USD"),
+}
+
+
+def _resolve_codex_alias_pricing(model_name: str) -> Optional[tuple[float, float, str]]:
+    """兼容 Codex CLI 运行时模型别名的成本计算。"""
+    normalized = str(model_name or "").strip()
+    if not normalized:
+        return None
+    if normalized == "gpt-5.4-mini" or normalized.startswith("codex-gpt-5.4-mini"):
+        return _CODEX_PRICING_BY_MODEL["codex-gpt-5.4-mini"]
+    if normalized == "gpt-5.4" or normalized.startswith("codex-gpt-5.4"):
+        return _CODEX_PRICING_BY_MODEL["codex-gpt-5.4"]
+    return None
+
 # 发出废弃警告
 warnings.warn(
     "ConfigManager is deprecated and will be removed in version 2.0 (2026-03-31). "
@@ -36,7 +53,12 @@ warnings.warn(
 )
 
 try:
-    from .mongodb_storage import MongoDBStorage
+    from .mongodb_storage import (
+        MongoDBStorage,
+        describe_mongodb_connection_target,
+        get_mongodb_runtime_context,
+        redact_mongodb_connection_string,
+    )
     MONGODB_AVAILABLE = True
 except ImportError as e:
     logger.error(f"❌ [ConfigManager] 导入 MongoDBStorage 失败 (ImportError): {e}")
@@ -44,12 +66,18 @@ except ImportError as e:
     logger.error(f"   堆栈: {traceback.format_exc()}")
     MONGODB_AVAILABLE = False
     MongoDBStorage = None
+    describe_mongodb_connection_target = None
+    get_mongodb_runtime_context = None
+    redact_mongodb_connection_string = None
 except Exception as e:
     logger.error(f"❌ [ConfigManager] 导入 MongoDBStorage 失败 (Exception): {e}")
     import traceback
     logger.error(f"   堆栈: {traceback.format_exc()}")
     MONGODB_AVAILABLE = False
     MongoDBStorage = None
+    describe_mongodb_connection_target = None
+    get_mongodb_runtime_context = None
+    redact_mongodb_connection_string = None
 
 
 class ConfigManager:
@@ -164,9 +192,31 @@ class ConfigManager:
         try:
             connection_string = os.getenv("MONGODB_CONNECTION_STRING")
             database_name = os.getenv("MONGODB_DATABASE_NAME", "tradingagents")
+            discrete_host = os.getenv("MONGODB_HOST", "")
+            discrete_port = os.getenv("MONGODB_PORT", "")
+            discrete_database = os.getenv("MONGODB_DATABASE", "")
+            discrete_username = os.getenv("MONGODB_USERNAME", "")
 
             logger.info(f"🔍 [ConfigManager] MONGODB_CONNECTION_STRING={'已设置' if connection_string else '未设置'}")
             logger.info(f"🔍 [ConfigManager] MONGODB_DATABASE_NAME={database_name}")
+            if connection_string and redact_mongodb_connection_string and describe_mongodb_connection_target:
+                logger.info(
+                    "🔍 [ConfigManager] MongoDB 连接诊断: target=%s, uri=%s",
+                    describe_mongodb_connection_target(connection_string),
+                    redact_mongodb_connection_string(connection_string),
+                )
+            logger.info(
+                "🔍 [ConfigManager] 离散Mongo配置: host=%s, port=%s, database=%s, username=%s",
+                discrete_host or "-",
+                discrete_port or "-",
+                discrete_database or "-",
+                discrete_username or "-",
+            )
+            if get_mongodb_runtime_context:
+                logger.info(
+                    "🔍 [ConfigManager] 运行上下文: %s",
+                    get_mongodb_runtime_context(),
+                )
 
             if not connection_string:
                 logger.error("❌ [ConfigManager] MONGODB_CONNECTION_STRING 未设置，无法初始化 MongoDB 存储")
@@ -268,6 +318,10 @@ class ConfigManager:
                 PricingConfig("google", "gemini-2.5-flash-lite-preview-06-17", 0.00025, 0.0005, "USD"),
                 PricingConfig("google", "gemini-pro", 0.00025, 0.0005, "USD"),
                 PricingConfig("google", "gemini-pro-vision", 0.00025, 0.0005, "USD"),
+
+                # Codex CLI 定价（美元）
+                PricingConfig("codex", "codex-gpt-5.4-mini", 0.00075, 0.0045, "USD"),
+                PricingConfig("codex", "codex-gpt-5.4", 0.0025, 0.015, "USD"),
             ]
             self.save_pricing(default_pricing)
         
@@ -458,6 +512,14 @@ class ConfigManager:
                 output_cost = (output_tokens / 1000) * pricing.output_price_per_1k
                 total_cost = input_cost + output_cost
                 return round(total_cost, 6), pricing.currency
+
+        if provider == "codex":
+            codex_pricing = _resolve_codex_alias_pricing(model_name)
+            if codex_pricing:
+                input_cost = (input_tokens / 1000) * codex_pricing[0]
+                output_cost = (output_tokens / 1000) * codex_pricing[1]
+                total_cost = input_cost + output_cost
+                return round(total_cost, 6), codex_pricing[2]
 
         # 只在找不到配置时输出调试信息
         logger.warning(f"⚠️ [calculate_cost] 未找到匹配的定价配置: {provider}/{model_name}")
