@@ -43,6 +43,7 @@ def test_build_codex_command_uses_medium_by_default():
     )
 
     assert 'model_reasoning_effort="medium"' in command
+    assert "service_tier=flex" in command
 
 
 def test_build_codex_command_resume_omits_schema_and_sandbox():
@@ -447,7 +448,7 @@ def test_run_codex_exec_includes_cli_overrides(monkeypatch):
     }
     assert captured["command"][0:3] == ["codex", "-a", "untrusted"]
     assert 'model_reasoning_effort="high"' in captured["command"]
-    assert 'service_tier="fast"' in captured["command"]
+    assert "service_tier=fast" in captured["command"]
     assert "exec" in captured["command"]
     assert "--json" in captured["command"]
     assert "workspace-write" in captured["command"]

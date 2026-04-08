@@ -187,7 +187,7 @@ class MongoDBStorage:
         
         try:
             from datetime import timedelta
-            cutoff_date = datetime.now() - timedelta(days=days)
+            cutoff_date = datetime.now(ZoneInfo(get_timezone_name())) - timedelta(days=days)
             
             # 聚合查询
             pipeline = [
@@ -241,7 +241,7 @@ class MongoDBStorage:
         
         try:
             from datetime import timedelta
-            cutoff_date = datetime.now() - timedelta(days=days)
+            cutoff_date = datetime.now(ZoneInfo(get_timezone_name())) - timedelta(days=days)
             
             # 按供应商聚合
             pipeline = [
@@ -289,7 +289,7 @@ class MongoDBStorage:
         try:
             from datetime import timedelta
 
-            cutoff_date = datetime.now() - timedelta(days=days)
+            cutoff_date = datetime.now(ZoneInfo(get_timezone_name())) - timedelta(days=days)
             
             result = self.collection.delete_many({
                 'timestamp': {'$lt': cutoff_date.isoformat()}

@@ -582,18 +582,18 @@ class ConfigManager:
         records = self.load_usage_records()
         
         # 过滤最近N天的记录
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
-        cutoff_date = datetime.now() - timedelta(days=days)
+        timezone = ZoneInfo(get_timezone_name())
+        cutoff_date = datetime.now(timezone) - timedelta(days=days)
         
         recent_records = []
         for record in records:
-            try:
-                record_date = datetime.fromisoformat(record.timestamp)
-                if record_date >= cutoff_date:
-                    recent_records.append(record)
-            except ValueError:
+            record_date = self._parse_usage_record_timestamp(record.timestamp)
+            if record_date is None:
                 continue
+            if record_date >= cutoff_date:
+                recent_records.append(record)
         
         # 统计数据
         total_cost = sum(record.cost for record in recent_records)
@@ -632,6 +632,20 @@ class ConfigManager:
             "provider_stats": provider_stats,
             "records_count": len(recent_records)
         }
+
+    def _parse_usage_record_timestamp(self, timestamp: str) -> Optional[datetime]:
+        """解析使用记录时间戳，并兼容历史 naive datetime 记录。"""
+        try:
+            record_date = datetime.fromisoformat(timestamp)
+        except ValueError:
+            return None
+
+        timezone = ZoneInfo(get_timezone_name())
+        if record_date.tzinfo is None:
+            # 兼容旧 JSON 记录：历史上可能写入过不带时区的本地时间字符串。
+            return record_date.replace(tzinfo=timezone)
+
+        return record_date.astimezone(timezone)
     
     def get_data_dir(self) -> str:
         """获取数据目录路径"""

@@ -982,7 +982,7 @@ class ChatCodexCLI(BaseChatModel):
                 "-c",
                 f"model_reasoning_effort={json.dumps(self.reasoning_effort)}",
                 "-c",
-                'service_tier="fast"' if self.fast_mode else 'service_tier="flex"',
+                "service_tier=fast" if self.fast_mode else "service_tier=flex",
             ]
         )
         command.append("exec")
