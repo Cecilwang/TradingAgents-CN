@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict
 
 
@@ -89,3 +90,77 @@ def extract_report_action(report: Dict[str, Any]) -> str:
                 return action
 
     return ""
+
+
+def normalize_report_target_price(value: Any) -> float | None:
+    """把目标价统一转换为数字。"""
+    if value is None:
+        return None
+
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    cleaned = (
+        text.replace("HK$", "")
+        .replace("US$", "")
+        .replace("$", "")
+        .replace("¥", "")
+        .replace("￥", "")
+        .replace(",", "")
+        .strip()
+    )
+    try:
+        return float(cleaned)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_target_price_from_text(text: str) -> float | None:
+    """从自由文本中提取目标价。"""
+    if not text:
+        return None
+
+    patterns = [
+        r"(?:目标价|目标价格|参考价格|目标价位)\s*[:：]\s*([A-Za-z$¥￥HKUS\.\-0-9, ]+)",
+        r"(?:target\s*price)\s*[:：]\s*([A-Za-z$¥￥HKUS\.\-0-9, ]+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if not match:
+            continue
+        price = normalize_report_target_price(match.group(1))
+        if price is not None:
+            return price
+    return None
+
+
+def extract_report_target_price(report: Dict[str, Any]) -> float | None:
+    """从报告文档中提取参考价格/目标价。"""
+    if not isinstance(report, dict):
+        return None
+
+    decision = report.get("decision")
+    if isinstance(decision, dict):
+        price = normalize_report_target_price(decision.get("target_price"))
+        if price is not None:
+            return price
+
+    recommendation = parse_target_price_from_text(str(report.get("recommendation", "")))
+    if recommendation is not None:
+        return recommendation
+
+    reports = report.get("reports") or {}
+    if isinstance(reports, dict):
+        for key in ("final_trade_decision", "risk_management_decision", "investment_plan", "trader_investment_plan"):
+            price = parse_target_price_from_text(str(reports.get(key, "")))
+            if price is not None:
+                return price
+
+    return None

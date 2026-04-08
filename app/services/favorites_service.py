@@ -8,8 +8,8 @@ from datetime import datetime
 from bson import ObjectId
 
 from app.core.database import get_mongo_db
+from app.utils.report_helpers import extract_report_action, extract_report_target_price
 from app.services.quotes_service import get_quotes_service
-from app.utils.report_helpers import extract_report_action
 
 
 class FavoritesService:
@@ -54,6 +54,7 @@ class FavoritesService:
             "change_percent": None,
             "volume": None,
             "latest_report_action": None,
+            "latest_report_target_price": None,
         }
 
     def _infer_market_from_code(self, stock_code: Optional[str]) -> str:
@@ -201,6 +202,7 @@ class FavoritesService:
             )
             result = (doc or {}).get("result") or {}
             target["item"]["latest_report_action"] = extract_report_action(result) or None
+            target["item"]["latest_report_target_price"] = extract_report_target_price(result)
 
     async def _load_quotes_from_mongo(
         self,

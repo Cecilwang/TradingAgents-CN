@@ -123,6 +123,15 @@
           </template>
         </el-table-column>
 
+        <el-table-column prop="target_price" label="参考价格" width="120">
+          <template #default="{ row }">
+            <span v-if="row.target_price !== null && row.target_price !== undefined">
+              {{ formatTargetPrice(row.target_price) }}
+            </span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+
         <el-table-column prop="model_info" label="分析模型" width="180">
           <template #default="{ row }">
             <el-tag v-if="row.model_info && row.model_info !== 'Unknown'" type="info" size="small">
@@ -467,6 +476,10 @@ const getExecutionActionTagType = (action: string) => {
   if (action === '卖出') return 'danger'
   if (action === '持有') return 'warning'
   return 'info'
+}
+
+const formatTargetPrice = (price: number) => {
+  return Number(price).toFixed(2)
 }
 
 import { formatDateTime } from '@/utils/datetime'

@@ -1,5 +1,6 @@
 from app.utils.report_helpers import (
     extract_report_action,
+    extract_report_target_price,
 )
 
 
@@ -18,3 +19,22 @@ def test_extract_report_action_falls_back_to_recommendation_text():
     }
 
     assert extract_report_action(report) == "持有"
+
+
+def test_extract_report_target_price_prefers_decision_target_price():
+    report = {
+        "decision": {"target_price": "¥128.50"},
+        "recommendation": "目标价格：120元。"
+    }
+
+    assert extract_report_target_price(report) == 128.5
+
+
+def test_extract_report_target_price_falls_back_to_report_text():
+    report = {
+        "reports": {
+            "final_trade_decision": "最终建议：买入\n目标价：$245.80\n理由：增长稳健"
+        }
+    }
+
+    assert extract_report_target_price(report) == 245.8

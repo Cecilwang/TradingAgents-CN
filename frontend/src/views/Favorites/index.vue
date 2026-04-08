@@ -166,6 +166,17 @@
           </template>
         </el-table-column>
 
+        <el-table-column prop="latest_report_target_price" label="参考价格" width="110">
+          <template #default="{ row }">
+            <span
+              v-if="row.latest_report_target_price !== null && row.latest_report_target_price !== undefined"
+            >
+              {{ formatPrice(row.latest_report_target_price) }}
+            </span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+
         <el-table-column prop="tags" label="标签" width="150">
           <template #default="{ row }">
             <el-tag

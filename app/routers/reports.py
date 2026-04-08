@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from .auth_db import get_current_user
 from ..core.database import get_mongo_db
 from ..utils.timezone import to_config_tz
-from ..utils.report_helpers import extract_report_action
+from ..utils.report_helpers import extract_report_action, extract_report_target_price
 import logging
 
 logger = logging.getLogger("webapi")
@@ -215,6 +215,7 @@ async def get_reports_list(
                 "summary": doc.get("summary", ""),
                 "recommendation": doc.get("recommendation", ""),
                 "execution_action": extract_report_action(doc),
+                "target_price": extract_report_target_price(doc),
                 "file_size": len(str(doc.get("reports", {}))),  # 估算大小
                 "source": doc.get("source", "unknown"),
                 "task_id": doc.get("task_id", "")

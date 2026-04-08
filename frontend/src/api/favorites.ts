@@ -16,6 +16,7 @@ export interface FavoriteItem {
   change_percent?: number | null
   volume?: number | null
   latest_report_action?: string | null
+  latest_report_target_price?: number | null
 }
 
 export interface AddFavoriteReq {
