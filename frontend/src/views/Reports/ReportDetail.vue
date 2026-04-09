@@ -927,16 +927,53 @@ const formatStructuredModuleContent = (value: unknown): string => {
   return String(value).trim()
 }
 
-const getModuleDisplayContent = (_moduleName: string, content: string) => {
-  const trimmed = content.trim()
-  if (!trimmed || !['{', '['].includes(trimmed[0])) {
+const DIALOGUE_REPORT_MARKERS: Record<string, string> = {
+  bull_researcher: 'Bull Analyst:',
+  bear_researcher: 'Bear Analyst:',
+  risky_analyst: 'Risky Analyst:',
+  safe_analyst: 'Safe Analyst:',
+  neutral_analyst: 'Neutral Analyst:'
+}
+
+const formatDialogueRounds = (moduleName: string, content: string) => {
+  const marker = DIALOGUE_REPORT_MARKERS[moduleName]
+  if (!marker) return content
+
+  const normalized = content.trim()
+  if (!normalized.startsWith(marker) || !normalized.includes(`\n${marker}`)) {
     return content
   }
 
-  try {
-    return formatStructuredModuleContent(JSON.parse(trimmed)) || content
-  } catch {
+  const rounds = normalized
+    .split(`\n${marker}`)
+    .map((segment, index) => {
+      const roundContent = index === 0 ? segment.trim() : `${marker}${segment}`.trim()
+      return roundContent
+    })
+    .filter(Boolean)
+
+  if (rounds.length <= 1) {
     return content
+  }
+
+  return rounds
+    .map((round, index) => `### 第 ${index + 1} 轮\n\n${round}`)
+    .join('\n\n---\n\n')
+}
+
+const getModuleDisplayContent = (moduleName: string, content: string) => {
+  const trimmed = content.trim()
+  if (!trimmed || !['{', '['].includes(trimmed[0])) {
+    return formatDialogueRounds(moduleName, content)
+  }
+
+  try {
+    return formatDialogueRounds(
+      moduleName,
+      formatStructuredModuleContent(JSON.parse(trimmed)) || content
+    )
+  } catch {
+    return formatDialogueRounds(moduleName, content)
   }
 }
 

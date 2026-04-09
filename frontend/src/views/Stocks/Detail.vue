@@ -298,7 +298,7 @@
         >
           <div class="report-content">
             <el-scrollbar height="500px">
-              <div class="markdown-body" v-html="renderMarkdown(report.content)"></div>
+              <div class="markdown-body" v-html="renderMarkdown(report.content, report.key)"></div>
             </el-scrollbar>
           </div>
         </el-tab-pane>
@@ -1146,11 +1146,40 @@ const orderedReportEntries = computed(() => {
     .map(([key, content]) => ({ key, content }))
 })
 
+const DIALOGUE_REPORT_MARKERS: Record<string, string> = {
+  bull_researcher: 'Bull Analyst:',
+  bear_researcher: 'Bear Analyst:',
+  risky_analyst: 'Risky Analyst:',
+  safe_analyst: 'Safe Analyst:',
+  neutral_analyst: 'Neutral Analyst:'
+}
+
+function formatDialogueRounds(reportKey: string, content: string): string {
+  const marker = DIALOGUE_REPORT_MARKERS[reportKey]
+  if (!marker) return content
+
+  const normalized = content.trim()
+  if (!normalized.startsWith(marker) || !normalized.includes(`\n${marker}`)) {
+    return content
+  }
+
+  const rounds = normalized
+    .split(`\n${marker}`)
+    .map((segment, index) => (index === 0 ? segment.trim() : `${marker}${segment}`.trim()))
+    .filter(Boolean)
+
+  if (rounds.length <= 1) return content
+
+  return rounds
+    .map((round, index) => `### 第 ${index + 1} 轮\n\n${round}`)
+    .join('\n\n---\n\n')
+}
+
 // 渲染Markdown
-function renderMarkdown(content: string): string {
+function renderMarkdown(content: string, reportKey?: string): string {
   if (!content) return '<p>暂无内容</p>'
   try {
-    return marked(content)
+    return marked(reportKey ? formatDialogueRounds(reportKey, content) : content)
   } catch (e) {
     console.error('Markdown渲染失败:', e)
     return `<pre>${content}</pre>`
