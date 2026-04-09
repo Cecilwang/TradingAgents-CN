@@ -49,22 +49,23 @@
           </el-statistic>
         </el-col>
         <el-col :span="8">
-          <div class="cost-statistic">
-            <div class="cost-label">
+          <el-statistic class="cost-statistic" title="总成本" :value="0">
+            <template #prefix>
               <el-icon><Money /></el-icon>
-              <span>总成本</span>
-            </div>
-            <div class="cost-values">
-              <div v-for="(cost, currency) in statistics.cost_by_currency" :key="currency" class="cost-item">
-                <span class="cost-amount">{{ cost.toFixed(4) }}</span>
-                <span class="cost-currency">{{ getCurrencySymbol(currency) }}</span>
+            </template>
+            <template #value>
+              <div class="cost-values">
+                <div v-for="(cost, currency) in statistics.cost_by_currency" :key="currency" class="cost-item">
+                  <span class="cost-amount">{{ cost.toFixed(4) }}</span>
+                  <span class="cost-currency">{{ getCurrencySymbol(currency) }}</span>
+                </div>
+                <div v-if="Object.keys(statistics.cost_by_currency || {}).length === 0" class="cost-item">
+                  <span class="cost-amount">0.0000</span>
+                  <span class="cost-currency">元</span>
+                </div>
               </div>
-              <div v-if="Object.keys(statistics.cost_by_currency || {}).length === 0" class="cost-item">
-                <span class="cost-amount">0.0000</span>
-                <span class="cost-currency">元</span>
-              </div>
-            </div>
-          </div>
+            </template>
+          </el-statistic>
         </el-col>
       </el-row>
     </el-card>
@@ -451,36 +452,31 @@ onMounted(() => {
 }
 
 .cost-statistic {
-  padding: 20px;
-
-  .cost-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #909399;
-    font-size: 14px;
-    margin-bottom: 12px;
-  }
+  height: 100%;
 
   .cost-values {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 8px;
+    min-height: 32px;
+    align-items: center;
 
     .cost-item {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       gap: 4px;
 
       .cost-amount {
-        font-size: 24px;
+        font-size: var(--el-statistic-content-font-size);
         font-weight: 600;
-        color: #303133;
+        line-height: 1;
+        color: var(--el-text-color-primary);
       }
 
       .cost-currency {
         font-size: 14px;
-        color: #909399;
+        line-height: 1;
+        color: var(--el-text-color-secondary);
       }
     }
   }
