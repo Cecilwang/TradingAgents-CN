@@ -32,6 +32,7 @@ from app.services.config_service import ConfigService
 from app.services.memory_state_manager import get_memory_state_manager, TaskStatus
 from app.services.redis_progress_tracker import RedisProgressTracker, get_progress_by_id
 from app.services.progress_log_handler import register_analysis_tracker, unregister_analysis_tracker
+from tradingagents.utils.codex_session_metadata import extract_codex_role_sessions
 from tradingagents.utils.stock_utils import StockUtils, StockMarket
 
 # 设置日志
@@ -1973,7 +1974,9 @@ class SimpleAnalysisService:
                 # 🔥 添加模型信息字段
                 "model_info": model_info,
                 # 🆕 性能指标数据
-                "performance_metrics": state.get("performance_metrics", {}) if isinstance(state, dict) else {}
+                "performance_metrics": state.get("performance_metrics", {}) if isinstance(state, dict) else {},
+                # 透传角色级 Codex 会话，供报告详情回查对话历史。
+                "codex_role_sessions": extract_codex_role_sessions(state),
             }
 
             logger.info(f"✅ [线程池] 分析完成: {task_id} - 耗时{execution_time:.2f}秒")
@@ -2768,6 +2771,7 @@ class SimpleAnalysisService:
 
                 # 报告内容
                 "reports": reports,
+                "codex_role_sessions": result.get("codex_role_sessions", {}),
 
                 # 🔥 关键修复：添加格式化后的decision字段！
                 "decision": result.get("decision", {}),
@@ -2812,6 +2816,7 @@ class SimpleAnalysisService:
                         "execution_time": result.get("execution_time", 0),
                         "tokens_used": result.get("tokens_used", 0),
                         "reports": reports,  # 包含提取的报告内容
+                        "codex_role_sessions": result.get("codex_role_sessions", {}),
                         # 🔥 关键修复：添加格式化后的decision字段！
                         "decision": result.get("decision", {})
                     }}}
@@ -3040,7 +3045,8 @@ class SimpleAnalysisService:
                 'analysts': result.get('analysts', []),
                 'status': 'completed',
                 'reports_count': len(saved_files),
-                'report_types': list(saved_files.keys())
+                'report_types': list(saved_files.keys()),
+                'codex_role_sessions': result.get('codex_role_sessions', {}),
             }
 
             metadata_file = reports_dir.parent / "analysis_metadata.json"

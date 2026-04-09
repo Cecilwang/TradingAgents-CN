@@ -10,6 +10,8 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
+from tradingagents.utils.codex_session_metadata import extract_codex_role_sessions
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -184,6 +186,7 @@ class MongoDBReportManager:
 
                 # 报告内容
                 "reports": reports,
+                "codex_role_sessions": extract_codex_role_sessions(analysis_results),
 
                 # 元数据
                 "created_at": timestamp,
@@ -256,6 +259,7 @@ class MongoDBReportManager:
                     "tags": [],
                     "is_favorite": False,
                     "reports": doc.get("reports", {}),
+                    "codex_role_sessions": doc.get("codex_role_sessions", {}),
                     "source": "mongodb"
                 }
                 results.append(result)
@@ -289,6 +293,7 @@ class MongoDBReportManager:
                     "tags": [],
                     "is_favorite": False,
                     "reports": doc.get("reports", {}),
+                    "codex_role_sessions": doc.get("codex_role_sessions", {}),
                     "source": "mongodb"
                 }
                 return result

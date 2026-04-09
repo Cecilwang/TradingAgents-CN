@@ -12,8 +12,27 @@ from datetime import datetime
 from utils.report_exporter import render_export_buttons
 
 # 导入日志模块
+from tradingagents.utils.codex_session_metadata import (
+    extract_codex_role_sessions,
+    get_related_codex_sessions,
+)
 from tradingagents.utils.logging_manager import get_logger
 logger = get_logger('web')
+
+
+def render_report_codex_sessions(report_key, source_data):
+    """在当前分析结果页展示报告对应的 Codex sessions。"""
+    session_pairs = get_related_codex_sessions(
+        report_key,
+        extract_codex_role_sessions(source_data),
+    )
+    if not session_pairs:
+        return
+
+    st.markdown("**Codex Sessions**")
+    for role_name, session_id in session_pairs:
+        st.markdown(f"- `{role_name}`: `{session_id}`")
+    st.markdown("---")
 
 def render_results(results):
     """渲染分析结果"""
@@ -457,6 +476,7 @@ def render_detailed_analysis(state):
 
             # 格式化显示内容
             content = state[module['key']]
+            render_report_codex_sessions(module['key'], state)
             if isinstance(content, str):
                 st.markdown(content)
             elif isinstance(content, dict):

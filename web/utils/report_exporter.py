@@ -15,6 +15,7 @@ import tempfile
 import base64
 
 # 导入日志模块
+from tradingagents.utils.codex_session_metadata import extract_codex_role_sessions
 from tradingagents.utils.logging_manager import get_logger
 logger = get_logger('web')
 
@@ -783,7 +784,8 @@ def save_modular_reports_to_results_dir(results: Dict[str, Any], stock_symbol: s
             'analysts': results.get('analysts', []),
             'status': 'completed',
             'reports_count': len(saved_files),
-            'report_types': list(saved_files.keys())
+            'report_types': list(saved_files.keys()),
+            'codex_role_sessions': extract_codex_role_sessions(results),
         }
 
         metadata_file = reports_dir.parent / "analysis_metadata.json"

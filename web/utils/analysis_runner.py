@@ -10,6 +10,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 # 导入日志模块
+from tradingagents.utils.codex_session_metadata import extract_codex_role_sessions
 from tradingagents.utils.logging_manager import get_logger, get_logger_manager
 logger = get_logger('web')
 
@@ -516,7 +517,9 @@ def run_stock_analysis(stock_symbol, analysis_date, analysts, research_depth, ll
             'decision': decision,
             'success': True,
             'error': None,
-            'session_id': session_id if TOKEN_TRACKING_ENABLED else None
+            'session_id': session_id if TOKEN_TRACKING_ENABLED else None,
+            # 供报告详情页在每个模块顶部展示对应的 Codex 会话。
+            'codex_role_sessions': extract_codex_role_sessions(state),
         }
 
         # 记录分析完成的详细日志

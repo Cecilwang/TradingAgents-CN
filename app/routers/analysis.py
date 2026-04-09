@@ -287,6 +287,7 @@ async def get_task_result(
                     "analysts": mongo_result.get("analysts", []),
                     "research_depth": mongo_result.get("research_depth", "快速"),
                     "reports": mongo_result.get("reports", {}),
+                    "codex_role_sessions": mongo_result.get("codex_role_sessions", {}),
                     "created_at": mongo_result.get("created_at"),
                     "updated_at": mongo_result.get("updated_at"),
                     "status": mongo_result.get("status", "completed"),
@@ -329,6 +330,7 @@ async def get_task_result(
                         "analysts": r.get("analysts", []),
                         "research_depth": r.get("research_depth", "快速"),
                         "reports": r.get("reports", {}),
+                        "codex_role_sessions": r.get("codex_role_sessions", {}),
                         "state": r.get("state", {}),
                         "detailed_analysis": r.get("detailed_analysis", {}),
                         "created_at": tasks_doc.get("created_at"),
@@ -356,6 +358,7 @@ async def get_task_result(
             analysis_date = str(analysis_date_raw)[:10] if analysis_date_raw else None
 
             loaded_reports = {}
+            loaded_codex_role_sessions = {}
             try:
                 # 1) 尝试从环境变量 TRADINGAGENTS_RESULTS_DIR 指定的位置读取
                 base_env = os.getenv('TRADINGAGENTS_RESULTS_DIR')
@@ -384,8 +387,19 @@ async def get_task_result(
                                     loaded_reports[f.stem] = content.strip()
                             except Exception:
                                 pass
+                        metadata_file = d.parent / 'analysis_metadata.json'
+                        if metadata_file.exists():
+                            try:
+                                metadata = json.loads(metadata_file.read_text(encoding='utf-8'))
+                                metadata_sessions = metadata.get('codex_role_sessions', {})
+                                if isinstance(metadata_sessions, dict):
+                                    loaded_codex_role_sessions = metadata_sessions
+                            except Exception:
+                                pass
                 if loaded_reports:
                     result_data['reports'] = loaded_reports
+                    if loaded_codex_role_sessions:
+                        result_data['codex_role_sessions'] = loaded_codex_role_sessions
                     # 若 summary / recommendation 缺失，尝试从同名报告补全
                     if not result_data.get('summary') and loaded_reports.get('summary'):
                         result_data['summary'] = loaded_reports.get('summary')
@@ -658,6 +672,7 @@ async def get_task_result(
             "research_depth": safe_string(result_data.get("research_depth"), "快速"),
             "detailed_analysis": safe_dict(result_data.get("detailed_analysis")),
             "state": safe_dict(result_data.get("state")),
+            "codex_role_sessions": safe_dict(result_data.get("codex_role_sessions")),
             # 🔥 关键修复：添加decision字段！
             "decision": safe_dict(result_data.get("decision"))
         }

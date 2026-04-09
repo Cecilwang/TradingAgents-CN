@@ -14,6 +14,10 @@ import os
 from pathlib import Path
 import hashlib
 import logging
+from tradingagents.utils.codex_session_metadata import (
+    extract_codex_role_sessions,
+    get_related_codex_sessions,
+)
 
 # MongoDB相关导入
 try:
@@ -26,6 +30,21 @@ except ImportError as e:
 
 # 设置日志
 logger = logging.getLogger(__name__)
+
+
+def render_report_codex_sessions(report_key: str, source_data: Dict[str, Any]):
+    """在报告内容前渲染相关 Codex session。"""
+    session_pairs = get_related_codex_sessions(
+        report_key,
+        extract_codex_role_sessions(source_data),
+    )
+    if not session_pairs:
+        return
+
+    st.markdown("**Codex Sessions**")
+    for role_name, session_id in session_pairs:
+        st.markdown(f"- `{role_name}`: `{session_id}`")
+    st.markdown("---")
 
 def safe_timestamp_to_datetime(timestamp_value):
     """安全地将时间戳转换为datetime对象"""
@@ -152,6 +171,7 @@ def load_analysis_results(start_date=None, end_date=None, stock_symbol=None, ana
                     'tags': tags_data.get(mongo_result.get('analysis_id', ''), []),
                     'is_favorite': mongo_result.get('analysis_id', '') in favorites,
                     'reports': mongo_result.get('reports', {}),
+                    'codex_role_sessions': mongo_result.get('codex_role_sessions', {}),
                     'source': 'mongodb'  # 标记数据来源
                 }
                 all_results.append(result)
@@ -246,6 +266,7 @@ def load_analysis_results(start_date=None, end_date=None, stock_symbol=None, ana
                         # 尝试从元数据文件中读取真实的研究深度和分析师信息
                         research_depth = 1
                         analysts = ['market', 'fundamentals', 'trader']  # 默认值
+                        codex_role_sessions = {}
 
                         metadata_file = date_dir / "analysis_metadata.json"
                         if metadata_file.exists():
@@ -254,6 +275,7 @@ def load_analysis_results(start_date=None, end_date=None, stock_symbol=None, ana
                                     metadata = json.load(f)
                                     research_depth = metadata.get('research_depth', 1)
                                     analysts = metadata.get('analysts', analysts)
+                                    codex_role_sessions = metadata.get('codex_role_sessions', {})
                             except Exception as e:
                                 # 如果读取元数据失败，使用推断逻辑
                                 if len(reports) >= 5:
@@ -279,6 +301,7 @@ def load_analysis_results(start_date=None, end_date=None, stock_symbol=None, ana
                             'tags': tags_data.get(analysis_id, []),
                             'is_favorite': analysis_id in favorites,
                             'reports': reports,  # 保存所有报告内容
+                            'codex_role_sessions': codex_role_sessions,
                             'source': 'file_system'  # 标记数据来源
                         }
 
@@ -1284,6 +1307,7 @@ def render_detailed_analysis_content(selected_result):
             # 只有一个报告，直接显示
             st.markdown(f"### {tab_names[0]}")
             st.markdown("---")
+            render_report_codex_sessions(report_tabs[0], selected_result)
             st.markdown(reports[report_tabs[0]])
         else:
             # 多个报告，使用标签页
@@ -1291,6 +1315,7 @@ def render_detailed_analysis_content(selected_result):
             
             for i, (tab, report_key) in enumerate(zip(tabs, report_tabs)):
                 with tab:
+                    render_report_codex_sessions(report_key, selected_result)
                     st.markdown(reports[report_key])
         
         return
@@ -1794,6 +1819,7 @@ def show_expanded_detail(result):
             if not report_content.strip().startswith('#'):
                 st.markdown(f"### {tab_names[0]}")
                 st.markdown("---")
+            render_report_codex_sessions(report_tabs[0], result)
             st.markdown(report_content)
         else:
             # 多个报告，使用标签页
@@ -1801,6 +1827,7 @@ def show_expanded_detail(result):
 
             for i, (tab, report_key) in enumerate(zip(tabs, report_tabs)):
                 with tab:
+                    render_report_codex_sessions(report_key, result)
                     st.markdown(reports[report_key])
 
         st.markdown("---")
