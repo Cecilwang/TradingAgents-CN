@@ -49,11 +49,12 @@
           </el-statistic>
         </el-col>
         <el-col :span="8">
-          <el-statistic class="cost-statistic" title="总成本" :value="0">
-            <template #prefix>
-              <el-icon><Money /></el-icon>
-            </template>
-            <template #value>
+          <div class="cost-statistic el-statistic">
+            <div class="el-statistic__head">总成本</div>
+            <div class="el-statistic__content">
+              <div class="el-statistic__prefix">
+                <el-icon><Money /></el-icon>
+              </div>
               <div class="cost-values">
                 <div v-for="(cost, currency) in statistics.cost_by_currency" :key="currency" class="cost-item">
                   <span class="cost-amount">{{ cost.toFixed(4) }}</span>
@@ -64,8 +65,8 @@
                   <span class="cost-currency">元</span>
                 </div>
               </div>
-            </template>
-          </el-statistic>
+            </div>
+          </div>
         </el-col>
       </el-row>
     </el-card>
