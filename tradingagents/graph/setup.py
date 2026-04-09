@@ -8,6 +8,7 @@ from langgraph.prebuilt import ToolNode
 from tradingagents.agents import *
 from tradingagents.agents.utils.agent_states import AgentState
 from tradingagents.agents.utils.agent_utils import Toolkit
+from tradingagents.agents.utils.codex_session import merge_codex_session_event
 
 from .conditional_logic import ConditionalLogic
 
@@ -47,6 +48,26 @@ class GraphSetup:
         self.conditional_logic = conditional_logic
         self.config = config or {}
         self.react_llm = react_llm
+
+    def _wrap_node_with_codex_state(self, node):
+        """在节点返回时把单次 codex_session 累积进图运行态。"""
+        def wrapped_node(state):
+            node_update = node(state)
+            if not isinstance(node_update, dict):
+                return node_update
+
+            merged_codex_role_sessions = merge_codex_session_event(
+                state.get("codex_role_sessions", {}),
+                node_update.get("codex_session"),
+            )
+            if merged_codex_role_sessions == state.get("codex_role_sessions", {}):
+                return node_update
+
+            updated_node = dict(node_update)
+            updated_node["codex_role_sessions"] = merged_codex_role_sessions
+            return updated_node
+
+        return wrapped_node
 
     def setup_graph(
         self, selected_analysts=["market", "social", "news", "fundamentals"]
@@ -161,21 +182,36 @@ class GraphSetup:
 
         # Add analyst nodes to the graph
         for analyst_type, node in analyst_nodes.items():
-            workflow.add_node(f"{analyst_type.capitalize()} Analyst", node)
+            workflow.add_node(
+                f"{analyst_type.capitalize()} Analyst",
+                self._wrap_node_with_codex_state(node),
+            )
             workflow.add_node(
                 f"Msg Clear {analyst_type.capitalize()}", delete_nodes[analyst_type]
             )
             workflow.add_node(f"tools_{analyst_type}", tool_nodes[analyst_type])
 
         # Add other nodes
-        workflow.add_node("Bull Researcher", bull_researcher_node)
-        workflow.add_node("Bear Researcher", bear_researcher_node)
-        workflow.add_node("Research Manager", research_manager_node)
-        workflow.add_node("Trader", trader_node)
-        workflow.add_node("Risky Analyst", risky_analyst)
-        workflow.add_node("Neutral Analyst", neutral_analyst)
-        workflow.add_node("Safe Analyst", safe_analyst)
-        workflow.add_node("Risk Judge", risk_manager_node)
+        workflow.add_node(
+            "Bull Researcher",
+            self._wrap_node_with_codex_state(bull_researcher_node),
+        )
+        workflow.add_node(
+            "Bear Researcher",
+            self._wrap_node_with_codex_state(bear_researcher_node),
+        )
+        workflow.add_node(
+            "Research Manager",
+            self._wrap_node_with_codex_state(research_manager_node),
+        )
+        workflow.add_node("Trader", self._wrap_node_with_codex_state(trader_node))
+        workflow.add_node("Risky Analyst", self._wrap_node_with_codex_state(risky_analyst))
+        workflow.add_node(
+            "Neutral Analyst",
+            self._wrap_node_with_codex_state(neutral_analyst),
+        )
+        workflow.add_node("Safe Analyst", self._wrap_node_with_codex_state(safe_analyst))
+        workflow.add_node("Risk Judge", self._wrap_node_with_codex_state(risk_manager_node))
 
         # Define edges
         # Start with the first analyst

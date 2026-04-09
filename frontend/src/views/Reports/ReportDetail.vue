@@ -232,17 +232,17 @@
           >
             <div class="module-content">
               <div
-                v-if="getModuleCodexSession(module.key)"
+                v-if="getModuleCodexSession(module.key, report?.codex_role_sessions)"
                 class="codex-session-block"
               >
                 <div class="codex-session-title">Codex Sessions</div>
                 <div class="codex-session-list">
                   <div
-                    v-for="sessionId in getModuleCodexSession(module.key)?.sessionIds || []"
+                    v-for="sessionId in getModuleCodexSession(module.key, report?.codex_role_sessions)?.sessionIds || []"
                     :key="`${module.key}-${sessionId}`"
                     class="codex-session-item"
                   >
-                    <span class="codex-session-role">{{ getModuleCodexSession(module.key)?.roleName }}</span>
+                    <span class="codex-session-role">{{ getModuleCodexSession(module.key, report?.codex_role_sessions)?.roleName }}</span>
                     <el-tag type="info" effect="plain" class="codex-session-tag">
                       {{ sessionId }}
                     </el-tag>
