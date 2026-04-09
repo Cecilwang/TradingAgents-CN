@@ -331,13 +331,13 @@ const REPORT_DISPLAY_ORDER = [
   'bull_researcher',
   'bear_researcher',
   'research_team_decision',
+  'investment_plan',
   'trader_investment_plan',
   'risky_analyst',
   'safe_analyst',
   'neutral_analyst',
   'risk_management_decision',
   'final_trade_decision',
-  'investment_plan',
   'investment_debate_state',
   'risk_debate_state',
   'detailed_analysis'
@@ -869,7 +869,8 @@ const getModuleDisplayName = (moduleName: string) => {
     // 研究团队 (3个)
     bull_researcher: '🐂 多头研究员',
     bear_researcher: '🐻 空头研究员',
-    research_team_decision: '🔬 研究经理决策',
+    research_team_decision: '🔬 多空研究结论',
+    investment_plan: '📋 多空投资计划',
 
     // 交易团队 (1个)
     trader_investment_plan: '💼 交易员计划',
@@ -878,13 +879,12 @@ const getModuleDisplayName = (moduleName: string) => {
     risky_analyst: '⚡ 激进分析师',
     safe_analyst: '🛡️ 保守分析师',
     neutral_analyst: '⚖️ 中性分析师',
-    risk_management_decision: '👔 投资组合经理',
+    risk_management_decision: '👔 风险控制结论',
 
     // 最终决策 (1个)
     final_trade_decision: '🎯 最终交易决策',
 
     // 兼容旧字段
-    investment_plan: '📋 投资建议',
     investment_debate_state: '🔬 研究团队决策（旧）',
     risk_debate_state: '⚖️ 风险管理团队（旧）',
     detailed_analysis: '📄 详细分析'
