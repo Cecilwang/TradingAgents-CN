@@ -623,6 +623,24 @@
                         <!-- 报告内容 -->
                         <div class="report-content-wrapper">
                           <div
+                            v-if="getModuleCodexSessions(report.key).length > 0"
+                            class="codex-session-block"
+                          >
+                            <div class="codex-session-title">Codex Sessions</div>
+                            <div class="codex-session-list">
+                              <div
+                                v-for="session in getModuleCodexSessions(report.key)"
+                                :key="`${report.key}-${session.roleName}`"
+                                class="codex-session-item"
+                              >
+                                <span class="codex-session-role">{{ session.roleName }}</span>
+                                <el-tag type="info" effect="plain" class="codex-session-tag">
+                                  {{ session.sessionId }}
+                                </el-tag>
+                              </div>
+                            </div>
+                          </div>
+                          <div
                             class="report-content"
                             v-html="formatReportContent(report.content)"
                             v-if="report.content"
@@ -716,6 +734,7 @@ import { ANALYSTS, convertAnalystNamesToIds } from '@/constants/analysts'
 import { marked } from 'marked'
 import { recommendModels, validateModels, type ModelRecommendationResponse } from '@/api/modelCapabilities'
 import { validateStockCode, getStockCodeFormatHelp, getStockCodeExamples } from '@/utils/stockValidator'
+import { getRelatedCodexSessions } from '@/utils/codexSessions'
 import { normalizeMarketForAnalysis, getMarketByStockCode } from '@/utils/market'
 
 // 配置marked选项
@@ -1245,7 +1264,7 @@ const getActionTagType = (action: string): 'primary' | 'success' | 'warning' | '
 // 获取分析报告
 const getAnalysisReports = (data: any) => {
   console.log('📊 getAnalysisReports 输入数据:', data)
-  const reports: Array<{title: string, content: any}> = []
+  const reports: Array<{key: string, title: string, content: any}> = []
 
   // 优先从 reports 字段获取数据（新的API格式）
   let reportsData = data
@@ -1297,6 +1316,7 @@ const getAnalysisReports = (data: any) => {
     if (content) {
       console.log(`📊 找到报告: ${mapping.key} -> ${mapping.title}`)
       reports.push({
+        key: mapping.key,
         title: mapping.title,
         content: content
       })
@@ -1311,6 +1331,13 @@ const getAnalysisReports = (data: any) => {
   }
 
   return reports
+}
+
+const getModuleCodexSessions = (moduleName: string) => {
+  return getRelatedCodexSessions(
+    moduleName,
+    analysisResults.value?.codex_role_sessions || {}
+  )
 }
 
 // 获取报告图标
@@ -3229,6 +3256,49 @@ onMounted(async () => {
 .report-content {
   line-height: 1.6;
   color: #374151;
+}
+
+.codex-session-block {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid #d9ecff;
+  border-radius: 10px;
+  background: #f5faff;
+}
+
+.codex-session-title {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #409eff;
+  letter-spacing: 0.2px;
+}
+
+.codex-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.codex-session-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.codex-session-role {
+  color: #606266;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.codex-session-tag {
+  max-width: 100%;
+  font-family: Monaco, Menlo, Consolas, monospace;
+  white-space: normal;
+  word-break: break-all;
 }
 
 .report-content h1,
