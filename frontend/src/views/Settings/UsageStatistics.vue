@@ -455,6 +455,12 @@ onMounted(() => {
 .cost-statistic {
   height: 100%;
 
+  .el-statistic__content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   .cost-values {
     display: flex;
     flex-wrap: wrap;
