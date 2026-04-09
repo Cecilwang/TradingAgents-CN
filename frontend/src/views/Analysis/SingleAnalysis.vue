@@ -1290,7 +1290,8 @@ const getAnalysisReports = (data: any) => {
     // 研究团队 (3个)
     { key: 'bull_researcher', title: '🐂 多头研究员', category: '研究团队' },
     { key: 'bear_researcher', title: '🐻 空头研究员', category: '研究团队' },
-    { key: 'research_team_decision', title: '🔬 研究经理决策', category: '研究团队' },
+    { key: 'research_team_decision', title: '🔬 多空研究结论', category: '研究团队' },
+    { key: 'investment_plan', title: '📋 多空投资计划', category: '研究团队' },
 
     // 交易团队 (1个)
     { key: 'trader_investment_plan', title: '💼 交易员计划', category: '交易团队' },
@@ -1299,13 +1300,12 @@ const getAnalysisReports = (data: any) => {
     { key: 'risky_analyst', title: '⚡ 激进分析师', category: '风险管理团队' },
     { key: 'safe_analyst', title: '🛡️ 保守分析师', category: '风险管理团队' },
     { key: 'neutral_analyst', title: '⚖️ 中性分析师', category: '风险管理团队' },
-    { key: 'risk_management_decision', title: '👔 投资组合经理', category: '风险管理团队' },
+    { key: 'risk_management_decision', title: '👔 风险控制结论', category: '风险管理团队' },
 
     // 最终决策 (1个)
     { key: 'final_trade_decision', title: '🎯 最终交易决策', category: '最终决策' },
 
     // 兼容旧格式
-    { key: 'investment_plan', title: '📋 投资建议', category: '其他' },
     { key: 'investment_debate_state', title: '🔬 研究团队决策（旧）', category: '其他' },
     { key: 'risk_debate_state', title: '⚖️ 风险管理团队（旧）', category: '其他' }
   ]
@@ -1347,10 +1347,10 @@ const getReportIcon = (title: string) => {
     '💰 基本面分析': '💰',
     '📰 新闻事件分析': '📰',
     '💭 市场情绪分析': '💭',
-    '📋 投资建议': '📋',
-    '🔬 研究团队决策': '🔬',
-    '💼 交易团队计划': '💼',
-    '⚖️ 风险管理团队': '⚖️',
+    '📋 多空投资计划': '📋',
+    '🔬 多空研究结论': '🔬',
+    '💼 交易员计划': '💼',
+    '👔 风险控制结论': '👔',
     '🎯 最终交易决策': '🎯'
   }
   return iconMap[title] || '📊'
@@ -1368,10 +1368,10 @@ const getReportDescription = (title: string) => {
     '💰 基本面分析': '财务数据、估值水平、盈利能力分析',
     '📰 新闻事件分析': '相关新闻事件、市场动态影响分析',
     '💭 市场情绪分析': '投资者情绪、社交媒体情绪指标',
-    '📋 投资建议': '具体投资策略、仓位管理建议',
-    '🔬 研究团队决策': '多头/空头研究员辩论分析，研究经理综合决策',
-    '💼 交易团队计划': '专业交易员制定的具体交易执行计划',
-    '⚖️ 风险管理团队': '激进/保守/中性分析师风险评估，投资组合经理最终决策',
+    '📋 多空投资计划': '基于多空辩论形成的综合投资计划',
+    '🔬 多空研究结论': '多头/空头研究员辩论后的综合研究结论',
+    '💼 交易员计划': '专业交易员制定的具体交易执行计划',
+    '👔 风险控制结论': '激进/保守/中性分析师风险评估后的风控结论',
     '🎯 最终交易决策': '综合所有团队分析后的最终投资决策'
   }
   return descMap[title] || '详细分析报告'
