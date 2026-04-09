@@ -71,6 +71,16 @@ def _normalize_hk_task_symbol(stock_code: str) -> str:
     return f"{normalized_code}.HK"
 
 
+def _normalize_a_share_validation_symbol(stock_code: str) -> str:
+    """A股验证阶段统一使用 6 位数字，避免 .SH/.SZ 后缀触发格式校验失败。"""
+    raw_code = str(stock_code or "").strip().upper()
+    if raw_code.endswith(".SH") or raw_code.endswith(".SZ"):
+        normalized_code = raw_code.split(".")[0]
+        logger.info(f"🔧 [A股验证] 标准化股票代码: {raw_code} -> {normalized_code}")
+        return normalized_code
+    return raw_code
+
+
 def _get_cached_task_stock_name(collection_name: str, query: Dict[str, Any]) -> Optional[str]:
     """优先从 MongoDB 缓存集合读取股票名称，减少任务中心重复走在线接口。"""
     try:
@@ -1004,6 +1014,9 @@ class SimpleAnalysisService:
 
             # 获取市场类型
             market_type = _infer_market_type_from_symbol(stock_code)
+            validation_stock_code = stock_code
+            if market_type == "A股":
+                validation_stock_code = _normalize_a_share_validation_symbol(stock_code)
 
             # 获取分析日期并转换为字符串格式
             analysis_date = request.parameters.analysis_date if request.parameters else None
@@ -1024,7 +1037,7 @@ class SimpleAnalysisService:
 
             # 🔥 使用异步版本，直接 await，避免事件循环冲突
             validation_result = await prepare_stock_data_async(
-                stock_code=stock_code,
+                stock_code=validation_stock_code,
                 market_type=market_type,
                 period_days=30,
                 analysis_date=analysis_date
