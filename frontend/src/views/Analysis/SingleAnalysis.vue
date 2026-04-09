@@ -642,7 +642,7 @@
                           </div>
                           <div
                             class="report-content"
-                            v-html="formatReportContent(report.content)"
+                            v-html="formatReportContent(report.content, report.key)"
                             v-if="report.content"
                           ></div>
                           <div v-else class="no-content">
@@ -1417,6 +1417,37 @@ const getModuleDisplayContent = (content: string) => {
   }
 }
 
+const DIALOGUE_REPORT_MARKERS: Record<string, string> = {
+  bull_researcher: 'Bull Analyst:',
+  bear_researcher: 'Bear Analyst:',
+  risky_analyst: 'Risky Analyst:',
+  safe_analyst: 'Safe Analyst:',
+  neutral_analyst: 'Neutral Analyst:'
+}
+
+const formatDialogueRounds = (reportKey: string, content: string) => {
+  const marker = DIALOGUE_REPORT_MARKERS[reportKey]
+  if (!marker) return content
+
+  const normalized = content.trim()
+  if (!normalized.startsWith(marker) || !normalized.includes(`\n${marker}`)) {
+    return content
+  }
+
+  const rounds = normalized
+    .split(`\n${marker}`)
+    .map((segment, index) => (index === 0 ? segment.trim() : `${marker}${segment}`.trim()))
+    .filter(Boolean)
+
+  if (rounds.length <= 1) {
+    return content
+  }
+
+  return rounds
+    .map((round, index) => `### 第 ${index + 1} 轮\n\n${round}`)
+    .join('\n\n---\n\n')
+}
+
 const analysisSummary = computed(() => {
   const data = analysisResults.value
   if (!data) return ''
@@ -1433,7 +1464,7 @@ const analysisSummary = computed(() => {
 })
 
 // 格式化报告内容
-const formatReportContent = (content: any) => {
+const formatReportContent = (content: any, reportKey = '') => {
   console.log('🎨 [DEBUG] formatReportContent 被调用:', {
     content: content,
     type: typeof content,
@@ -1469,7 +1500,7 @@ const formatReportContent = (content: any) => {
 
   try {
     // 使用marked库将Markdown转换为HTML
-    const htmlContent = marked.parse(stringContent) as string
+    const htmlContent = marked.parse(formatDialogueRounds(reportKey, stringContent)) as string
 
     console.log('🎨 [DEBUG] Marked转换完成，HTML长度:', htmlContent.length)
     console.log('🎨 [DEBUG] HTML前200字符:', htmlContent.substring(0, 200))
