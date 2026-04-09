@@ -106,55 +106,45 @@ def render_token_statistics():
 def render_overview_metrics(stats: Dict[str, Any], time_range: str):
     """渲染概览指标"""
     st.markdown(f"**📈 {time_range}概览**")
-    
-    # 创建指标卡片
-    col1, col2, col3, col4 = st.columns(4)
-    
+
+    total_cached_input_tokens = stats.get('total_cached_input_tokens', 0)
+
+    # 将核心指标压缩到一行，避免总成本掉到下一行。
+    col1, col2, col3, col4, col5 = st.columns(5)
+
     with col1:
+        st.metric(
+            label="🔢 请求总数",
+            value=f"{stats['total_requests']:,}",
+            delta=None
+        )
+
+    with col2:
+        st.metric(
+            label="📥 总未命中输入",
+            value=f"{stats['total_input_tokens']:,}",
+            delta=None
+        )
+
+    with col3:
+        st.metric(
+            label="💾 总缓存命中",
+            value=f"{total_cached_input_tokens:,}",
+            delta=None
+        )
+
+    with col4:
+        st.metric(
+            label="📤 总输出Token",
+            value=f"{stats['total_output_tokens']:,}",
+            delta=None
+        )
+
+    with col5:
         st.metric(
             label="💰 总成本",
             value=f"¥{stats['total_cost']:.4f}",
             delta=None
-        )
-    
-    with col2:
-        st.metric(
-            label="🔢 总调用次数",
-            value=f"{stats['total_requests']:,}",
-            delta=None
-        )
-    
-    with col3:
-        total_tokens = stats['total_input_tokens'] + stats['total_output_tokens']
-        st.metric(
-            label="📊 总Token数",
-            value=f"{total_tokens:,}",
-            delta=None
-        )
-    
-    with col4:
-        avg_cost = stats['total_cost'] / stats['total_requests'] if stats['total_requests'] > 0 else 0
-        st.metric(
-            label="📊 平均每次成本",
-            value=f"¥{avg_cost:.4f}",
-            delta=None
-        )
-    
-    # Token使用分布
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.metric(
-            label="📥 输入Token",
-            value=f"{stats['total_input_tokens']:,}",
-            delta=f"{stats['total_input_tokens']/(stats['total_input_tokens']+stats['total_output_tokens'])*100:.1f}%"
-        )
-    
-    with col2:
-        st.metric(
-            label="📤 输出Token",
-            value=f"{stats['total_output_tokens']:,}",
-            delta=f"{stats['total_output_tokens']/(stats['total_input_tokens']+stats['total_output_tokens'])*100:.1f}%"
         )
 
 def render_detailed_charts(records: List[UsageRecord], stats: Dict[str, Any]):
@@ -339,30 +329,57 @@ def render_detailed_records_table(records: List[UsageRecord]):
             '时间': datetime.fromisoformat(record.timestamp).strftime('%Y-%m-%d %H:%M:%S'),
             '供应商': record.provider,
             '模型': record.model_name,
-            '输入Token': record.input_tokens,
+            '未命中输入': record.input_tokens,
+            '缓存命中': getattr(record, 'cached_input_tokens', 0),
             '输出Token': record.output_tokens,
-            '总Token': record.input_tokens + record.output_tokens,
+            '总Token': record.input_tokens + getattr(record, 'cached_input_tokens', 0) + record.output_tokens,
             '成本(¥)': f"{record.cost:.4f}",
             '会话ID': record.session_id[:12] + '...' if len(record.session_id) > 12 else record.session_id,
             '分析类型': record.analysis_type
         }
         for record in sorted(records, key=lambda x: x.timestamp, reverse=True)
     ])
-    
-    # 分页显示
-    page_size = 20
+
+    # 分页显示。显式维护页码状态，避免 Streamlit 重绘后页码失效。
     total_records = len(records_df)
-    total_pages = (total_records + page_size - 1) // page_size
-    
-    if total_pages > 1:
-        page = st.selectbox(f"页面 (共{total_pages}页, {total_records}条记录)", range(1, total_pages + 1))
-        start_idx = (page - 1) * page_size
-        end_idx = min(start_idx + page_size, total_records)
-        display_df = records_df.iloc[start_idx:end_idx]
-    else:
-        display_df = records_df
-    
+    control_col1, control_col2 = st.columns([1, 2])
+
+    with control_col1:
+        page_size = st.selectbox(
+            "每页显示",
+            [20, 50, 100, 200],
+            index=0,
+            key="token_stats_page_size",
+        )
+
+    total_pages = max((total_records + page_size - 1) // page_size, 1)
+    current_page = int(st.session_state.get("token_stats_page", 1))
+    current_page = min(max(current_page, 1), total_pages)
+    st.session_state["token_stats_page"] = current_page
+
+    with control_col2:
+        if total_pages > 1:
+            selected_page = st.number_input(
+                f"页码 (共{total_pages}页, {total_records}条记录)",
+                min_value=1,
+                max_value=total_pages,
+                value=current_page,
+                step=1,
+                key="token_stats_page_input",
+            )
+            current_page = int(selected_page)
+            st.session_state["token_stats_page"] = current_page
+
+    start_idx = (current_page - 1) * page_size
+    end_idx = min(start_idx + page_size, total_records)
+    display_df = records_df.iloc[start_idx:end_idx]
+
     st.dataframe(display_df, use_container_width=True)
+
+    if total_pages > 1:
+        st.caption(
+            f"第 {current_page} 页，共 {total_pages} 页，总计 {total_records} 条记录"
+        )
 
 def load_detailed_records(days: int) -> List[UsageRecord]:
     """加载详细记录"""
