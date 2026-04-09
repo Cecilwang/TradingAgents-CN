@@ -27,12 +27,12 @@ from .usage_models import UsageRecord, ModelConfig, PricingConfig
 logger = get_logger('agents')
 
 _CODEX_PRICING_BY_MODEL = {
-    "codex-gpt-5.4-mini": (0.00075, 0.0045, "USD"),
-    "codex-gpt-5.4": (0.0025, 0.015, "USD"),
+    "codex-gpt-5.4-mini": (0.00075, 0.0045, 0.000075, "USD"),
+    "codex-gpt-5.4": (0.0025, 0.015, 0.00025, "USD"),
 }
 
 
-def _resolve_codex_alias_pricing(model_name: str) -> Optional[tuple[float, float, str]]:
+def _resolve_codex_alias_pricing(model_name: str) -> Optional[tuple[float, float, float, str]]:
     """兼容 Codex CLI 运行时模型别名的成本计算。"""
     normalized = str(model_name or "").strip()
     if not normalized:
@@ -289,8 +289,8 @@ class ConfigManager:
                 PricingConfig("google", "gemini-pro-vision", 0.00025, 0.0005, "USD"),
 
                 # Codex CLI 定价（美元）
-                PricingConfig("codex", "codex-gpt-5.4-mini", 0.00075, 0.0045, "USD"),
-                PricingConfig("codex", "codex-gpt-5.4", 0.0025, 0.015, "USD"),
+                PricingConfig("codex", "codex-gpt-5.4-mini", 0.00075, 0.0045, "USD", 0.000075),
+                PricingConfig("codex", "codex-gpt-5.4", 0.0025, 0.015, "USD", 0.00025),
             ]
             self.save_pricing(default_pricing)
         
@@ -413,8 +413,14 @@ class ConfigManager:
         provider_session_id: str = "",
     ):
         """添加使用记录"""
-        # 计算成本和货币单位
-        cost, currency = self.calculate_cost(provider, model_name, input_tokens, output_tokens)
+        # input_tokens 统一表示未命中输入 token，缓存命中 token 单独计费。
+        cost, currency = self.calculate_cost(
+            provider,
+            model_name,
+            input_tokens,
+            output_tokens,
+            cached_input_tokens=cached_input_tokens,
+        )
 
         record = UsageRecord(
             timestamp=datetime.now(ZoneInfo(get_timezone_name())).isoformat(),
@@ -431,7 +437,9 @@ class ConfigManager:
         )
 
         # 🔍 详细日志：记录保存位置
-        logger.info(f"💾 [Token记录] 准备保存: {provider}/{model_name}, 输入={input_tokens}, 输出={output_tokens}, 成本=¥{cost:.4f}, session={session_id}")
+        logger.info(
+            f"💾 [Token记录] 准备保存: {provider}/{model_name}, 未命中输入={input_tokens}, 缓存命中={cached_input_tokens}, 输出={output_tokens}, 成本=¥{cost:.4f}, session={session_id}"
+        )
 
         # 优先使用MongoDB存储
         if self.mongodb_storage and self.mongodb_storage.is_connected():
@@ -466,7 +474,14 @@ class ConfigManager:
         logger.info(f"✅ [Token记录] JSON 文件保存成功: {self.usage_file}")
         return record
     
-    def calculate_cost(self, provider: str, model_name: str, input_tokens: int, output_tokens: int) -> tuple[float, str]:
+    def calculate_cost(
+        self,
+        provider: str,
+        model_name: str,
+        input_tokens: int,
+        output_tokens: int,
+        cached_input_tokens: int = 0,
+    ) -> tuple[float, str]:
         """
         计算使用成本
 
@@ -477,18 +492,23 @@ class ConfigManager:
 
         for pricing in pricing_configs:
             if pricing.provider == provider and pricing.model_name == model_name:
+                cached_input_price = pricing.cached_input_price_per_1k
+                if cached_input_price is None:
+                    cached_input_price = pricing.input_price_per_1k
                 input_cost = (input_tokens / 1000) * pricing.input_price_per_1k
+                cached_input_cost = (cached_input_tokens / 1000) * cached_input_price
                 output_cost = (output_tokens / 1000) * pricing.output_price_per_1k
-                total_cost = input_cost + output_cost
+                total_cost = input_cost + cached_input_cost + output_cost
                 return round(total_cost, 6), pricing.currency
 
         if provider == "codex":
             codex_pricing = _resolve_codex_alias_pricing(model_name)
             if codex_pricing:
                 input_cost = (input_tokens / 1000) * codex_pricing[0]
+                cached_input_cost = (cached_input_tokens / 1000) * codex_pricing[2]
                 output_cost = (output_tokens / 1000) * codex_pricing[1]
-                total_cost = input_cost + output_cost
-                return round(total_cost, 6), codex_pricing[2]
+                total_cost = input_cost + cached_input_cost + output_cost
+                return round(total_cost, 6), codex_pricing[3]
 
         # 只在找不到配置时输出调试信息
         logger.warning(f"⚠️ [calculate_cost] 未找到匹配的定价配置: {provider}/{model_name}")

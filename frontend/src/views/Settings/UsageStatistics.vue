@@ -28,7 +28,14 @@
           </el-statistic>
         </el-col>
         <el-col :span="6">
-          <el-statistic title="总输入 Token" :value="statistics.total_input_tokens">
+          <el-statistic title="总未命中输入 Token" :value="statistics.total_input_tokens">
+            <template #prefix>
+              <el-icon><Upload /></el-icon>
+            </template>
+          </el-statistic>
+        </el-col>
+        <el-col :span="6">
+          <el-statistic title="总缓存命中 Token" :value="statistics.total_cached_input_tokens || 0">
             <template #prefix>
               <el-icon><Upload /></el-icon>
             </template>
@@ -112,7 +119,8 @@
         </el-table-column>
         <el-table-column prop="provider" label="供应商" width="120" />
         <el-table-column prop="model_name" label="模型" width="180" />
-        <el-table-column prop="input_tokens" label="输入 Token" width="120" align="right" />
+        <el-table-column prop="input_tokens" label="未命中输入 Token" width="140" align="right" />
+        <el-table-column prop="cached_input_tokens" label="缓存命中 Token" width="140" align="right" />
         <el-table-column prop="output_tokens" label="输出 Token" width="120" align="right" />
         <el-table-column prop="cost" label="成本" width="140" align="right">
           <template #default="{ row }">
@@ -156,6 +164,7 @@ const loading = ref(false)
 const statistics = ref<UsageStatistics>({
   total_requests: 0,
   total_input_tokens: 0,
+  total_cached_input_tokens: 0,
   total_output_tokens: 0,
   total_cost: 0,
   cost_by_currency: {},
@@ -477,4 +486,3 @@ onMounted(() => {
   align-items: center;
 }
 </style>
-

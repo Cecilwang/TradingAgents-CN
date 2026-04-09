@@ -14,7 +14,7 @@ class UsageRecord:
     timestamp: str  # 时间戳
     provider: str  # 供应商
     model_name: str  # 模型名称
-    input_tokens: int  # 输入token数
+    input_tokens: int  # 未命中的输入token数
     output_tokens: int  # 输出token数
     cost: float  # 成本
     currency: str = "CNY"  # 货币单位
@@ -41,6 +41,7 @@ class PricingConfig:
     """定价配置"""
     provider: str  # 供应商
     model_name: str  # 模型名称
-    input_price_per_1k: float  # 输入token价格（每1000个token）
+    input_price_per_1k: float  # 未命中输入token价格（每1000个token）
     output_price_per_1k: float  # 输出token价格（每1000个token）
     currency: str = "CNY"  # 货币单位
+    cached_input_price_per_1k: Optional[float] = None  # 缓存命中输入token价格（每1000个token）

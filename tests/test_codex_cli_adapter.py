@@ -311,7 +311,7 @@ def test_extract_execution_metadata_reads_thread_and_usage():
 
     assert metadata["thread_id"] == "thread_123"
     assert metadata["usage"] == {
-        "input_tokens": 120,
+        "input_tokens": 90,
         "cached_input_tokens": 30,
         "output_tokens": 45,
         "total_tokens": 165,
@@ -363,13 +363,13 @@ def test_generate_attaches_codex_usage_metadata(monkeypatch):
     assert message.response_metadata["session_id"] == "thread_456"
     assert message.response_metadata["analysis_session_id"] == "analysis_789"
     assert message.response_metadata["token_usage"] == {
-        "prompt_tokens": 210,
+        "prompt_tokens": 130,
         "completion_tokens": 55,
         "total_tokens": 265,
         "cached_input_tokens": 80,
     }
     assert message.usage_metadata == {
-        "input_tokens": 210,
+        "input_tokens": 130,
         "output_tokens": 55,
         "total_tokens": 265,
         "cached_input_tokens": 80,
@@ -378,7 +378,7 @@ def test_generate_attaches_codex_usage_metadata(monkeypatch):
         "session_id": "thread_456",
         "analysis_session_id": "analysis_789",
         "token_usage": {
-            "prompt_tokens": 210,
+            "prompt_tokens": 130,
             "completion_tokens": 55,
             "total_tokens": 265,
             "cached_input_tokens": 80,
@@ -552,7 +552,7 @@ def test_finalize_codex_execution_normalizes_resume_output(tmp_path):
     assert execution_result["execution_metadata"] == {
         "thread_id": "thread_resume_1",
         "usage": {
-            "input_tokens": 12,
+            "input_tokens": 8,
             "cached_input_tokens": 4,
             "output_tokens": 8,
             "total_tokens": 20,
@@ -869,8 +869,10 @@ def test_default_model_catalog_contains_codex_pricing_metadata():
         "codex-gpt-5.4",
     ]
     assert codex_catalog["models"][0]["input_price_per_1k"] == 0.00075
+    assert codex_catalog["models"][0]["cached_input_price_per_1k"] == 0.000075
     assert codex_catalog["models"][0]["output_price_per_1k"] == 0.0045
     assert codex_catalog["models"][0]["currency"] == "USD"
     assert codex_catalog["models"][1]["input_price_per_1k"] == 0.0025
+    assert codex_catalog["models"][1]["cached_input_price_per_1k"] == 0.00025
     assert codex_catalog["models"][1]["output_price_per_1k"] == 0.015
     assert codex_catalog["models"][1]["currency"] == "USD"

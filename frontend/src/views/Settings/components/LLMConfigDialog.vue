@@ -341,13 +341,24 @@
       <!-- 定价配置 -->
       <el-divider content-position="left">定价配置</el-divider>
 
-      <el-form-item label="输入价格" prop="input_price_per_1k">
+      <el-form-item label="未命中输入价格" prop="input_price_per_1k">
         <el-input-number
           v-model="formData.input_price_per_1k"
           :min="0"
           :step="0.0001"
           :controls="false"
           placeholder="每1000个token的价格"
+        />
+        <span class="ml-2 text-gray-500">{{ formData.currency || 'CNY' }}/1K tokens</span>
+      </el-form-item>
+
+      <el-form-item label="缓存命中输入价格" prop="cached_input_price_per_1k">
+        <el-input-number
+          v-model="formData.cached_input_price_per_1k"
+          :min="0"
+          :step="0.0001"
+          :controls="false"
+          placeholder="每1000个缓存命中 token 的价格"
         />
         <span class="ml-2 text-gray-500">{{ formData.currency || 'CNY' }}/1K tokens</span>
       </el-form-item>
@@ -608,6 +619,7 @@ const defaultFormData = {
   model_category: '',
   description: '',
   input_price_per_1k: 0,
+  cached_input_price_per_1k: 0,
   output_price_per_1k: 0,
   currency: 'CNY',
   // 🆕 模型能力配置
@@ -658,6 +670,7 @@ const buildFormData = (config?: Partial<LLMConfig> | null) => {
     ...defaultFormData,
     ...config,
     input_price_per_1k: config.input_price_per_1k ?? defaultFormData.input_price_per_1k,
+    cached_input_price_per_1k: config.cached_input_price_per_1k ?? config.input_price_per_1k ?? defaultFormData.cached_input_price_per_1k,
     output_price_per_1k: config.output_price_per_1k ?? defaultFormData.output_price_per_1k,
     currency: config.currency || defaultFormData.currency,
     model_display_name: config.model_display_name || '',
@@ -690,6 +703,7 @@ interface ModelInfo {
   context_length?: number
   max_tokens?: number
   input_price_per_1k?: number
+  cached_input_price_per_1k?: number
   output_price_per_1k?: number
   currency?: string
   is_deprecated?: boolean
@@ -813,6 +827,7 @@ const handleProviderChange = async (provider: string) => {
   formData.value.model_display_name = ''
   // 清空价格信息
   formData.value.input_price_per_1k = 0
+  formData.value.cached_input_price_per_1k = 0
   formData.value.output_price_per_1k = 0
   formData.value.currency = 'CNY'
 
@@ -854,6 +869,11 @@ const handleModelSelect = (modelCode: string) => {
 
       if (modelInfo.input_price_per_1k !== undefined) {
         formData.value.input_price_per_1k = modelInfo.input_price_per_1k
+      }
+      if (modelInfo.cached_input_price_per_1k !== undefined) {
+        formData.value.cached_input_price_per_1k = modelInfo.cached_input_price_per_1k
+      } else if (modelInfo.input_price_per_1k !== undefined) {
+        formData.value.cached_input_price_per_1k = modelInfo.input_price_per_1k
       }
       if (modelInfo.output_price_per_1k !== undefined) {
         formData.value.output_price_per_1k = modelInfo.output_price_per_1k
@@ -968,6 +988,7 @@ const handleSubmit = async () => {
     // 准备提交数据，移除api_key字段（由后端从厂家配置获取）
     const submitData = normalizeCodexFormData({
       ...formData.value,
+      cached_input_price_per_1k: formData.value.cached_input_price_per_1k ?? formData.value.input_price_per_1k,
       suitable_roles: [...formData.value.suitable_roles],
       features: [...formData.value.features],
       recommended_depths: [...formData.value.recommended_depths],

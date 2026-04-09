@@ -37,8 +37,10 @@ def test_install_export_package_contains_codex_seed():
     )
 
     assert codex_llm["input_price_per_1k"] == 0.0025
+    assert codex_llm["cached_input_price_per_1k"] == 0.00025
     assert codex_llm["output_price_per_1k"] == 0.015
     assert codex_llm["currency"] == "USD"
     assert codex_catalog_model["input_price_per_1k"] == 0.0025
+    assert codex_catalog_model["cached_input_price_per_1k"] == 0.00025
     assert codex_catalog_model["output_price_per_1k"] == 0.015
     assert codex_catalog_model["currency"] == "USD"
