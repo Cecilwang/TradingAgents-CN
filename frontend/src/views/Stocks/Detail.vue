@@ -185,14 +185,14 @@
               <!-- 报告列表预览 -->
               <div class="reports-preview">
                 <el-tag
-                  v-for="(content, key) in lastAnalysis.reports"
-                  :key="key"
+                  v-for="report in orderedReportEntries"
+                  :key="report.key"
                   size="small"
                   effect="plain"
                   class="report-tag"
-                  @click="openReport(key)"
+                  @click="openReport(report.key)"
                 >
-                  {{ formatReportName(key) }}
+                  {{ formatReportName(report.key) }}
                 </el-tag>
               </div>
             </div>
@@ -291,14 +291,14 @@
     >
       <el-tabs v-model="activeReportTab" type="border-card">
         <el-tab-pane
-          v-for="(content, key) in lastAnalysis?.reports"
-          :key="key"
-          :label="formatReportName(key)"
-          :name="key"
+          v-for="report in orderedReportEntries"
+          :key="report.key"
+          :label="formatReportName(report.key)"
+          :name="report.key"
         >
           <div class="report-content">
             <el-scrollbar height="500px">
-              <div class="markdown-body" v-html="renderMarkdown(content)"></div>
+              <div class="markdown-body" v-html="renderMarkdown(report.content)"></div>
             </el-scrollbar>
           </div>
         </el-tab-pane>
@@ -1112,6 +1112,40 @@ function formatReportName(key: string): string {
   return nameMap[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
 }
 
+const REPORT_DISPLAY_ORDER = [
+  'market_report',
+  'sentiment_report',
+  'news_report',
+  'fundamentals_report',
+  'bull_researcher',
+  'bear_researcher',
+  'research_team_decision',
+  'trader_investment_plan',
+  'risky_analyst',
+  'safe_analyst',
+  'neutral_analyst',
+  'risk_management_decision',
+  'final_trade_decision',
+  'investment_plan',
+  'investment_debate_state',
+  'risk_debate_state'
+] as const
+
+const orderedReportEntries = computed(() => {
+  const reports = lastAnalysis.value?.reports
+  if (!reports || typeof reports !== 'object') return []
+
+  const orderMap = new Map(REPORT_DISPLAY_ORDER.map((key, index) => [key, index]))
+  return Object.entries(reports)
+    .sort(([a], [b]) => {
+      const aIndex = orderMap.get(a) ?? Number.MAX_SAFE_INTEGER
+      const bIndex = orderMap.get(b) ?? Number.MAX_SAFE_INTEGER
+      if (aIndex !== bIndex) return aIndex - bIndex
+      return a.localeCompare(b, 'zh-CN')
+    })
+    .map(([key, content]) => ({ key, content }))
+})
+
 // 渲染Markdown
 function renderMarkdown(content: string): string {
   if (!content) return '<p>暂无内容</p>'
@@ -1157,9 +1191,9 @@ function exportReport() {
   fullReport += `**信心度**: ${fmtConf(lastAnalysis.value.confidence_score)}\n\n`
   fullReport += `---\n\n`
 
-  for (const [key, content] of Object.entries(lastAnalysis.value.reports)) {
-    fullReport += `## ${formatReportName(key)}\n\n`
-    fullReport += `${content}\n\n`
+  for (const report of orderedReportEntries.value) {
+    fullReport += `## ${formatReportName(report.key)}\n\n`
+    fullReport += `${report.content}\n\n`
     fullReport += `---\n\n`
   }
 
