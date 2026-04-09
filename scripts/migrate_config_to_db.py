@@ -200,6 +200,7 @@ class ConfigMigrator:
                 "enabled": model.get('enabled', False),
                 "is_default": False,  # 第一个启用的模型设为默认
                 "input_price_per_1k": pricing.get('input_price_per_1k', 0.0),
+                "cached_input_price_per_1k": pricing.get('cached_input_price_per_1k', pricing.get('input_price_per_1k', 0.0)),
                 "output_price_per_1k": pricing.get('output_price_per_1k', 0.0),
                 "currency": pricing.get('currency', 'USD'),
                 "extra_params": {}
@@ -392,4 +393,3 @@ async def main():
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))
-

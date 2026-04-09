@@ -612,6 +612,7 @@ def _sync_pricing_config(llm_configs):
                     "provider": llm_config.provider,
                     "model_name": llm_config.model_name,
                     "input_price_per_1k": llm_config.input_price_per_1k or 0.0,
+                    "cached_input_price_per_1k": llm_config.cached_input_price_per_1k if llm_config.cached_input_price_per_1k is not None else (llm_config.input_price_per_1k or 0.0),
                     "output_price_per_1k": llm_config.output_price_per_1k or 0.0,
                     "currency": llm_config.currency or "CNY"
                 }
@@ -708,6 +709,8 @@ async def _sync_pricing_config_from_db():
                     "provider": provider,
                     "model_name": llm_config.get('model_name'),
                     "input_price_per_1k": llm_config.get('input_price_per_1k') or 0.0,
+                    "cached_input_price_per_1k": llm_config.get('cached_input_price_per_1k')
+                    if llm_config.get('cached_input_price_per_1k') is not None else (llm_config.get('input_price_per_1k') or 0.0),
                     "output_price_per_1k": llm_config.get('output_price_per_1k') or 0.0,
                     "currency": llm_config.get('currency') or "CNY"
                 }
@@ -734,4 +737,3 @@ __all__ = [
     'reload_bridged_config',
     'sync_pricing_config_now',
 ]
-

@@ -32,6 +32,10 @@ export interface LLMConfig {
   model_name: string
   api_key?: string  // 可选，优先从厂家配置获取
   base_url?: string
+  input_price_per_1k?: number
+  cached_input_price_per_1k?: number
+  output_price_per_1k?: number
+  currency?: string
   max_tokens?: number
   temperature?: number
   timeout?: number

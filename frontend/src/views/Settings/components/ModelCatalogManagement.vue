@@ -191,11 +191,26 @@
                 />
               </template>
             </el-table-column>
-            <el-table-column label="输入价格/1K" width="180">
+            <el-table-column label="未命中输入价格/1K" width="180">
               <template #default="{ row, $index }">
                 <div style="display: flex; align-items: center; gap: 4px;">
                   <el-input-number
                     v-model="row.input_price_per_1k"
+                    :min="0"
+                    :step="0.0001"
+                    size="small"
+                    :controls="false"
+                    style="width: 110px;"
+                  />
+                  <span style="color: #909399; font-size: 12px; white-space: nowrap;">{{ row.currency || 'CNY' }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="缓存命中价格/1K" width="180">
+              <template #default="{ row, $index }">
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <el-input-number
+                    v-model="row.cached_input_price_per_1k"
                     :min="0"
                     :step="0.0001"
                     size="small"
@@ -298,6 +313,7 @@ interface ModelInfo {
   name: string
   display_name: string
   input_price_per_1k?: number | null
+  cached_input_price_per_1k?: number | null
   output_price_per_1k?: number | null
   context_length?: number | null
   max_tokens?: number | null
@@ -409,6 +425,7 @@ const handleAddModel = () => {
     name: '',
     display_name: '',
     input_price_per_1k: null,
+    cached_input_price_per_1k: null,
     output_price_per_1k: null,
     context_length: null,
     currency: 'CNY'
@@ -477,6 +494,7 @@ const handleFetchModelsFromAPI = async () => {
         display_name: model.name || model.id,
         // 使用 API 返回的价格信息（USD），如果没有则为 null
         input_price_per_1k: model.input_price_per_1k || null,
+        cached_input_price_per_1k: model.cached_input_price_per_1k ?? model.input_price_per_1k ?? null,
         output_price_per_1k: model.output_price_per_1k || null,
         context_length: model.context_length || null,
         // OpenRouter 的价格是 USD
@@ -484,7 +502,7 @@ const handleFetchModelsFromAPI = async () => {
       }))
 
       // 统计有价格信息的模型数量
-      const modelsWithPricing = formData.value.models.filter(m => m.input_price_per_1k || m.output_price_per_1k).length
+      const modelsWithPricing = formData.value.models.filter(m => m.input_price_per_1k || m.cached_input_price_per_1k || m.output_price_per_1k).length
 
       ElMessage.success(`成功获取 ${formData.value.models.length} 个模型（${modelsWithPricing} 个包含价格信息）`)
     } else {
@@ -539,34 +557,34 @@ const getPresetModels = (providerName: string): ModelInfo[] => {
   const presets: Record<string, ModelInfo[]> = {
     '302ai': [
       // OpenAI 模型
-      { name: 'gpt-4o', display_name: 'GPT-4o', input_price_per_1k: 0.005, output_price_per_1k: 0.015, context_length: 128000, currency: 'USD' },
-      { name: 'gpt-4o-mini', display_name: 'GPT-4o Mini', input_price_per_1k: 0.00015, output_price_per_1k: 0.0006, context_length: 128000, currency: 'USD' },
-      { name: 'gpt-4-turbo', display_name: 'GPT-4 Turbo', input_price_per_1k: 0.01, output_price_per_1k: 0.03, context_length: 128000, currency: 'USD' },
-      { name: 'gpt-3.5-turbo', display_name: 'GPT-3.5 Turbo', input_price_per_1k: 0.0005, output_price_per_1k: 0.0015, context_length: 16385, currency: 'USD' },
+      { name: 'gpt-4o', display_name: 'GPT-4o', input_price_per_1k: 0.005, cached_input_price_per_1k: 0.005, output_price_per_1k: 0.015, context_length: 128000, currency: 'USD' },
+      { name: 'gpt-4o-mini', display_name: 'GPT-4o Mini', input_price_per_1k: 0.00015, cached_input_price_per_1k: 0.00015, output_price_per_1k: 0.0006, context_length: 128000, currency: 'USD' },
+      { name: 'gpt-4-turbo', display_name: 'GPT-4 Turbo', input_price_per_1k: 0.01, cached_input_price_per_1k: 0.01, output_price_per_1k: 0.03, context_length: 128000, currency: 'USD' },
+      { name: 'gpt-3.5-turbo', display_name: 'GPT-3.5 Turbo', input_price_per_1k: 0.0005, cached_input_price_per_1k: 0.0005, output_price_per_1k: 0.0015, context_length: 16385, currency: 'USD' },
 
       // Anthropic 模型
-      { name: 'claude-3-5-sonnet-20241022', display_name: 'Claude 3.5 Sonnet', input_price_per_1k: 0.003, output_price_per_1k: 0.015, context_length: 200000, currency: 'USD' },
-      { name: 'claude-3-5-haiku-20241022', display_name: 'Claude 3.5 Haiku', input_price_per_1k: 0.001, output_price_per_1k: 0.005, context_length: 200000, currency: 'USD' },
-      { name: 'claude-3-opus-20240229', display_name: 'Claude 3 Opus', input_price_per_1k: 0.015, output_price_per_1k: 0.075, context_length: 200000, currency: 'USD' },
+      { name: 'claude-3-5-sonnet-20241022', display_name: 'Claude 3.5 Sonnet', input_price_per_1k: 0.003, cached_input_price_per_1k: 0.003, output_price_per_1k: 0.015, context_length: 200000, currency: 'USD' },
+      { name: 'claude-3-5-haiku-20241022', display_name: 'Claude 3.5 Haiku', input_price_per_1k: 0.001, cached_input_price_per_1k: 0.001, output_price_per_1k: 0.005, context_length: 200000, currency: 'USD' },
+      { name: 'claude-3-opus-20240229', display_name: 'Claude 3 Opus', input_price_per_1k: 0.015, cached_input_price_per_1k: 0.015, output_price_per_1k: 0.075, context_length: 200000, currency: 'USD' },
 
       // Google 模型
-      { name: 'gemini-2.0-flash-exp', display_name: 'Gemini 2.0 Flash', input_price_per_1k: 0, output_price_per_1k: 0, context_length: 1000000, currency: 'USD' },
-      { name: 'gemini-1.5-pro', display_name: 'Gemini 1.5 Pro', input_price_per_1k: 0.00125, output_price_per_1k: 0.005, context_length: 2000000, currency: 'USD' },
-      { name: 'gemini-1.5-flash', display_name: 'Gemini 1.5 Flash', input_price_per_1k: 0.000075, output_price_per_1k: 0.0003, context_length: 1000000, currency: 'USD' },
+      { name: 'gemini-2.0-flash-exp', display_name: 'Gemini 2.0 Flash', input_price_per_1k: 0, cached_input_price_per_1k: 0, output_price_per_1k: 0, context_length: 1000000, currency: 'USD' },
+      { name: 'gemini-1.5-pro', display_name: 'Gemini 1.5 Pro', input_price_per_1k: 0.00125, cached_input_price_per_1k: 0.00125, output_price_per_1k: 0.005, context_length: 2000000, currency: 'USD' },
+      { name: 'gemini-1.5-flash', display_name: 'Gemini 1.5 Flash', input_price_per_1k: 0.000075, cached_input_price_per_1k: 0.000075, output_price_per_1k: 0.0003, context_length: 1000000, currency: 'USD' },
     ],
     'openrouter': [
       // OpenAI 模型
-      { name: 'openai/gpt-4o', display_name: 'GPT-4o', input_price_per_1k: 0.005, output_price_per_1k: 0.015, context_length: 128000, currency: 'USD' },
-      { name: 'openai/gpt-4o-mini', display_name: 'GPT-4o Mini', input_price_per_1k: 0.00015, output_price_per_1k: 0.0006, context_length: 128000, currency: 'USD' },
-      { name: 'openai/gpt-3.5-turbo', display_name: 'GPT-3.5 Turbo', input_price_per_1k: 0.0005, output_price_per_1k: 0.0015, context_length: 16385, currency: 'USD' },
+      { name: 'openai/gpt-4o', display_name: 'GPT-4o', input_price_per_1k: 0.005, cached_input_price_per_1k: 0.005, output_price_per_1k: 0.015, context_length: 128000, currency: 'USD' },
+      { name: 'openai/gpt-4o-mini', display_name: 'GPT-4o Mini', input_price_per_1k: 0.00015, cached_input_price_per_1k: 0.00015, output_price_per_1k: 0.0006, context_length: 128000, currency: 'USD' },
+      { name: 'openai/gpt-3.5-turbo', display_name: 'GPT-3.5 Turbo', input_price_per_1k: 0.0005, cached_input_price_per_1k: 0.0005, output_price_per_1k: 0.0015, context_length: 16385, currency: 'USD' },
 
       // Anthropic 模型
-      { name: 'anthropic/claude-3.5-sonnet', display_name: 'Claude 3.5 Sonnet', input_price_per_1k: 0.003, output_price_per_1k: 0.015, context_length: 200000, currency: 'USD' },
-      { name: 'anthropic/claude-3-opus', display_name: 'Claude 3 Opus', input_price_per_1k: 0.015, output_price_per_1k: 0.075, context_length: 200000, currency: 'USD' },
+      { name: 'anthropic/claude-3.5-sonnet', display_name: 'Claude 3.5 Sonnet', input_price_per_1k: 0.003, cached_input_price_per_1k: 0.003, output_price_per_1k: 0.015, context_length: 200000, currency: 'USD' },
+      { name: 'anthropic/claude-3-opus', display_name: 'Claude 3 Opus', input_price_per_1k: 0.015, cached_input_price_per_1k: 0.015, output_price_per_1k: 0.075, context_length: 200000, currency: 'USD' },
 
       // Google 模型
-      { name: 'google/gemini-2.0-flash-exp', display_name: 'Gemini 2.0 Flash', input_price_per_1k: 0, output_price_per_1k: 0, context_length: 1000000, currency: 'USD' },
-      { name: 'google/gemini-pro-1.5', display_name: 'Gemini 1.5 Pro', input_price_per_1k: 0.00125, output_price_per_1k: 0.005, context_length: 2000000, currency: 'USD' },
+      { name: 'google/gemini-2.0-flash-exp', display_name: 'Gemini 2.0 Flash', input_price_per_1k: 0, cached_input_price_per_1k: 0, output_price_per_1k: 0, context_length: 1000000, currency: 'USD' },
+      { name: 'google/gemini-pro-1.5', display_name: 'Gemini 1.5 Pro', input_price_per_1k: 0.00125, cached_input_price_per_1k: 0.00125, output_price_per_1k: 0.005, context_length: 2000000, currency: 'USD' },
     ]
   }
 
@@ -586,7 +604,13 @@ const handleSave = async () => {
     
     saving.value = true
     try {
-      await configApi.saveModelCatalog(formData.value)
+      await configApi.saveModelCatalog({
+        ...formData.value,
+        models: formData.value.models.map(model => ({
+          ...model,
+          cached_input_price_per_1k: model.cached_input_price_per_1k ?? model.input_price_per_1k ?? null
+        }))
+      })
       ElMessage.success('保存成功')
       dialogVisible.value = false
       await loadCatalogs()
@@ -625,4 +649,3 @@ onMounted(() => {
   }
 }
 </style>
-

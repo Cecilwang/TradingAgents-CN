@@ -281,10 +281,11 @@
                   </el-table-column>
 
                   <!-- 定价 -->
-                  <el-table-column label="定价" width="180">
+                  <el-table-column label="定价" width="220">
                     <template #default="{ row }">
-                      <div v-if="row.input_price_per_1k || row.output_price_per_1k" class="pricing-cell">
-                        <div>输入: {{ formatPrice(row.input_price_per_1k) }} {{ row.currency || 'CNY' }}/1K</div>
+                      <div v-if="row.input_price_per_1k || row.cached_input_price_per_1k || row.output_price_per_1k" class="pricing-cell">
+                        <div>未命中输入: {{ formatPrice(row.input_price_per_1k) }} {{ row.currency || 'CNY' }}/1K</div>
+                        <div>缓存命中: {{ formatPrice(row.cached_input_price_per_1k ?? row.input_price_per_1k) }} {{ row.currency || 'CNY' }}/1K</div>
                         <div>输出: {{ formatPrice(row.output_price_per_1k) }} {{ row.currency || 'CNY' }}/1K</div>
                       </div>
                       <span v-else class="text-muted">-</span>

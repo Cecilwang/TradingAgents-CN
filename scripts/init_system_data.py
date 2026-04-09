@@ -185,6 +185,7 @@ async def create_model_config(db):
             "capabilities": ["chat", "analysis", "reasoning"],
             "pricing": {
                 "input_price_per_1k": 0.001,
+                "cached_input_price_per_1k": 0.001,
                 "output_price_per_1k": 0.002,
                 "currency": "CNY"
             },
@@ -205,6 +206,7 @@ async def create_model_config(db):
             "capabilities": ["chat", "analysis", "reasoning"],
             "pricing": {
                 "input_price_per_1k": 0.02,
+                "cached_input_price_per_1k": 0.02,
                 "output_price_per_1k": 0.06,
                 "currency": "CNY"
             },
@@ -225,6 +227,7 @@ async def create_model_config(db):
             "capabilities": ["chat", "analysis", "reasoning", "code"],
             "pricing": {
                 "input_price_per_1k": 0.03,
+                "cached_input_price_per_1k": 0.03,
                 "output_price_per_1k": 0.06,
                 "currency": "USD"
             },
@@ -338,4 +341,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

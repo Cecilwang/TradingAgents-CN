@@ -103,7 +103,8 @@ class ModelInfo(BaseModel):
     description: Optional[str] = Field(None, description="模型描述")
     context_length: Optional[int] = Field(None, description="上下文长度")
     max_tokens: Optional[int] = Field(None, description="最大输出token数")
-    input_price_per_1k: Optional[float] = Field(None, description="输入价格(每1K tokens)")
+    input_price_per_1k: Optional[float] = Field(None, description="未命中输入价格(每1K tokens)")
+    cached_input_price_per_1k: Optional[float] = Field(None, description="缓存命中输入价格(每1K tokens)")
     output_price_per_1k: Optional[float] = Field(None, description="输出价格(每1K tokens)")
     currency: str = Field(default="CNY", description="货币单位")
     is_deprecated: bool = Field(default=False, description="是否已废弃")
@@ -251,7 +252,8 @@ class LLMConfig(BaseModel):
     priority: int = Field(default=0, description="优先级")
 
     # 定价配置
-    input_price_per_1k: Optional[float] = Field(None, description="输入token价格(每1000个token)")
+    input_price_per_1k: Optional[float] = Field(None, description="未命中输入token价格(每1000个token)")
+    cached_input_price_per_1k: Optional[float] = Field(None, description="缓存命中输入token价格(每1000个token)")
     output_price_per_1k: Optional[float] = Field(None, description="输出token价格(每1000个token)")
     currency: str = Field(default="CNY", description="货币单位(CNY/USD/EUR)")
 
@@ -345,7 +347,7 @@ class UsageRecord(BaseModel):
     timestamp: str = Field(..., description="时间戳")
     provider: str = Field(..., description="供应商")
     model_name: str = Field(..., description="模型名称")
-    input_tokens: int = Field(..., description="输入token数")
+    input_tokens: int = Field(..., description="未命中输入token数")
     output_tokens: int = Field(..., description="输出token数")
     cost: float = Field(..., description="成本")
     currency: str = Field(default="CNY", description="货币单位")
@@ -359,7 +361,7 @@ class UsageRecord(BaseModel):
 class UsageStatistics(BaseModel):
     """使用统计"""
     total_requests: int = Field(default=0, description="总请求数")
-    total_input_tokens: int = Field(default=0, description="总输入token数")
+    total_input_tokens: int = Field(default=0, description="总未命中输入token数")
     total_cached_input_tokens: int = Field(default=0, description="总缓存命中的输入token数")
     total_output_tokens: int = Field(default=0, description="总输出token数")
     total_cost: float = Field(default=0.0, description="总成本（已废弃，使用 cost_by_currency）")
@@ -428,6 +430,7 @@ class LLMConfigRequest(BaseModel):
 
     # 定价配置
     input_price_per_1k: Optional[float] = None
+    cached_input_price_per_1k: Optional[float] = None
     output_price_per_1k: Optional[float] = None
     currency: str = "CNY"
 

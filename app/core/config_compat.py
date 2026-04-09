@@ -201,7 +201,7 @@ class TokenTrackerCompat:
         Args:
             provider: 提供商名称
             model_name: 模型名称
-            input_tokens: 输入 Token 数
+            input_tokens: 未命中输入 Token 数
             output_tokens: 输出 Token 数
             cost: 成本
         """

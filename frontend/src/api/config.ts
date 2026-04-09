@@ -52,6 +52,7 @@ export interface LLMConfig {
   sandbox_mode?: string
   // 定价配置
   input_price_per_1k?: number
+  cached_input_price_per_1k?: number
   output_price_per_1k?: number
   currency?: string
   // 高级配置
@@ -235,6 +236,7 @@ export const configApi = {
       context_length?: number
       max_tokens?: number
       input_price_per_1k?: number
+      cached_input_price_per_1k?: number
       output_price_per_1k?: number
       currency?: string
       is_deprecated?: boolean
@@ -256,6 +258,7 @@ export const configApi = {
       context_length?: number
       max_tokens?: number
       input_price_per_1k?: number
+      cached_input_price_per_1k?: number
       output_price_per_1k?: number
       currency?: string
       is_deprecated?: boolean

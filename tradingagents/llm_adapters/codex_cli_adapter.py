@@ -53,11 +53,13 @@ except ImportError:
 _CODEX_CLI_PRICING_BY_MODEL: Dict[str, Dict[str, Any]] = {
     "codex-gpt-5.4-mini": {
         "input_price_per_1k": 0.00075,
+        "cached_input_price_per_1k": 0.000075,
         "output_price_per_1k": 0.0045,
         "currency": "USD",
     },
     "codex-gpt-5.4": {
         "input_price_per_1k": 0.0025,
+        "cached_input_price_per_1k": 0.00025,
         "output_price_per_1k": 0.015,
         "currency": "USD",
     },
@@ -496,11 +498,16 @@ class ChatCodexCLI(BaseChatModel):
         if not isinstance(usage, dict):
             usage = {}
 
+        total_input_tokens = int(usage.get("input_tokens", 0) or 0)
+        cached_input_tokens = int(usage.get("cached_input_tokens", 0) or 0)
+        output_tokens = int(usage.get("output_tokens", 0) or 0)
+        input_tokens = max(total_input_tokens - cached_input_tokens, 0)
+
         return {
-            "input_tokens": int(usage.get("input_tokens", 0) or 0),
-            "output_tokens": int(usage.get("output_tokens", 0) or 0),
-            "total_tokens": int(usage.get("total_tokens", 0) or 0),
-            "cached_input_tokens": int(usage.get("cached_input_tokens", 0) or 0),
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": input_tokens + cached_input_tokens + output_tokens,
+            "cached_input_tokens": cached_input_tokens,
         }
 
     def _build_token_usage(
@@ -1780,14 +1787,15 @@ class ChatCodexCLI(BaseChatModel):
             if not isinstance(raw_usage, dict):
                 continue
 
-            input_tokens = int(raw_usage.get("input_tokens", 0) or 0)
+            total_input_tokens = int(raw_usage.get("input_tokens", 0) or 0)
             cached_input_tokens = int(raw_usage.get("cached_input_tokens", 0) or 0)
             output_tokens = int(raw_usage.get("output_tokens", 0) or 0)
+            input_tokens = max(total_input_tokens - cached_input_tokens, 0)
             usage = {
                 "input_tokens": input_tokens,
                 "cached_input_tokens": cached_input_tokens,
                 "output_tokens": output_tokens,
-                "total_tokens": input_tokens + output_tokens,
+                "total_tokens": input_tokens + cached_input_tokens + output_tokens,
             }
 
         return {
