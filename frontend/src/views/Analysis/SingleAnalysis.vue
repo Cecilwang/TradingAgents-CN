@@ -623,17 +623,17 @@
                         <!-- 报告内容 -->
                         <div class="report-content-wrapper">
                           <div
-                            v-if="getModuleCodexSession(report.key, analysisResult?.codex_role_sessions)"
+                            v-if="getModuleCodexSession(report.key, analysisResults?.codex_role_sessions)"
                             class="codex-session-block"
                           >
                             <div class="codex-session-title">Codex Sessions</div>
                             <div class="codex-session-list">
                               <div
-                                v-for="sessionId in getModuleCodexSession(report.key, analysisResult?.codex_role_sessions)?.sessionIds || []"
+                                v-for="sessionId in getModuleCodexSession(report.key, analysisResults?.codex_role_sessions)?.sessionIds || []"
                                 :key="`${report.key}-${sessionId}`"
                                 class="codex-session-item"
                               >
-                                <span class="codex-session-role">{{ getModuleCodexSession(report.key, analysisResult?.codex_role_sessions)?.roleName }}</span>
+                                <span class="codex-session-role">{{ getModuleCodexSession(report.key, analysisResults?.codex_role_sessions)?.roleName }}</span>
                                 <el-tag type="info" effect="plain" class="codex-session-tag">
                                   {{ sessionId }}
                                 </el-tag>
