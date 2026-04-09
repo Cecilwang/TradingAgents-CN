@@ -66,7 +66,7 @@ _CODEX_CLI_PRICING_BY_MODEL: Dict[str, Dict[str, Any]] = {
 
 def _default_working_dir() -> str:
     """返回项目根目录，供 Codex CLI 作为只读工作目录使用。"""
-    return str(Path(__file__).resolve().parents[2])
+    return str(Path(__file__).resolve().parents[2] / "codex")
 
 
 def get_codex_cli_status(command: str = "codex") -> Dict[str, Any]:
