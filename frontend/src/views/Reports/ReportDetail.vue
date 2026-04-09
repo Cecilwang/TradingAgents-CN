@@ -225,21 +225,21 @@
         
         <el-tabs v-model="activeModule" type="border-card">
           <el-tab-pane
-            v-for="(content, moduleName) in report.reports"
-            :key="moduleName"
-            :label="getModuleDisplayName(moduleName)"
-            :name="moduleName"
+            v-for="module in orderedReportModules"
+            :key="module.key"
+            :label="getModuleDisplayName(module.key)"
+            :name="module.key"
           >
             <div class="module-content">
               <div
-                v-if="getModuleCodexSessions(moduleName).length > 0"
+                v-if="getModuleCodexSessions(module.key).length > 0"
                 class="codex-session-block"
               >
                 <div class="codex-session-title">Codex Sessions</div>
                 <div class="codex-session-list">
                   <div
-                    v-for="session in getModuleCodexSessions(moduleName)"
-                    :key="`${moduleName}-${session.roleName}`"
+                    v-for="session in getModuleCodexSessions(module.key)"
+                    :key="`${module.key}-${session.roleName}`"
                     class="codex-session-item"
                   >
                     <span class="codex-session-role">{{ session.roleName }}</span>
@@ -249,11 +249,11 @@
                   </div>
                 </div>
               </div>
-              <div v-if="typeof content === 'string'" class="markdown-content">
-                <div v-html="renderMarkdown(getModuleDisplayContent(moduleName, content))"></div>
+              <div v-if="typeof module.content === 'string'" class="markdown-content">
+                <div v-html="renderMarkdown(getModuleDisplayContent(module.key, module.content))"></div>
               </div>
               <div v-else class="json-content">
-                <pre>{{ JSON.stringify(content, null, 2) }}</pre>
+                <pre>{{ JSON.stringify(module.content, null, 2) }}</pre>
               </div>
             </div>
           </el-tab-pane>
@@ -323,6 +323,41 @@ const report = ref(null)
 const activeModule = ref('')
 const llmConfigs = ref<LLMConfig[]>([]) // 存储所有模型配置
 
+const REPORT_DISPLAY_ORDER = [
+  'market_report',
+  'sentiment_report',
+  'news_report',
+  'fundamentals_report',
+  'bull_researcher',
+  'bear_researcher',
+  'research_team_decision',
+  'trader_investment_plan',
+  'risky_analyst',
+  'safe_analyst',
+  'neutral_analyst',
+  'risk_management_decision',
+  'final_trade_decision',
+  'investment_plan',
+  'investment_debate_state',
+  'risk_debate_state',
+  'detailed_analysis'
+] as const
+
+const sortReportEntries = (reports: Record<string, any> = {}) => {
+  const orderMap = new Map(REPORT_DISPLAY_ORDER.map((key, index) => [key, index]))
+  return Object.entries(reports).sort(([a], [b]) => {
+    const aIndex = orderMap.get(a) ?? Number.MAX_SAFE_INTEGER
+    const bIndex = orderMap.get(b) ?? Number.MAX_SAFE_INTEGER
+    if (aIndex !== bIndex) return aIndex - bIndex
+    return a.localeCompare(b, 'zh-CN')
+  })
+}
+
+const orderedReportModules = computed(() => {
+  if (!report.value?.reports || typeof report.value.reports !== 'object') return []
+  return sortReportEntries(report.value.reports).map(([key, content]) => ({ key, content }))
+})
+
 // 获取模型配置列表
 const fetchLLMConfigs = async () => {
   try {
@@ -359,9 +394,9 @@ const fetchReportDetail = async () => {
 
       // 设置默认激活的模块
       const reports = result.data.reports || {}
-      const moduleNames = Object.keys(reports)
-      if (moduleNames.length > 0) {
-        activeModule.value = moduleNames[0]
+      const orderedModules = sortReportEntries(reports)
+      if (orderedModules.length > 0) {
+        activeModule.value = orderedModules[0][0]
       }
     } else {
       throw new Error(result.message || '获取报告详情失败')
