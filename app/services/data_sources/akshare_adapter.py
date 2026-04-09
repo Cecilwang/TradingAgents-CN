@@ -4,6 +4,8 @@ AKShare data source adapter
 from typing import Optional, Dict
 import logging
 from datetime import datetime, timedelta
+from contextlib import contextmanager
+from unittest.mock import patch
 import pandas as pd
 
 from .base import DataSourceAdapter
@@ -32,6 +34,53 @@ class AKShareAdapter(DataSourceAdapter):
         except ImportError:
             return False
 
+    @contextmanager
+    def _capture_requests_diagnostics(self):
+        """捕获 requests 的最后一次响应，便于定位 JSON 解析前拿到的原始内容。"""
+        responses = []
+
+        try:
+            import requests
+        except ImportError:
+            yield responses
+            return
+
+        original_request = requests.sessions.Session.request
+
+        def wrapped_request(session, method, url, **kwargs):
+            response = original_request(session, method, url, **kwargs)
+            try:
+                text_preview = response.text[:500]
+            except Exception as text_error:
+                text_preview = f"<failed to read response text: {text_error}>"
+
+            responses.append({
+                "method": method,
+                "url": url,
+                "status_code": getattr(response, "status_code", None),
+                "content_type": response.headers.get("Content-Type", ""),
+                "text_preview": text_preview,
+            })
+            return response
+
+        with patch("requests.sessions.Session.request", new=wrapped_request):
+            yield responses
+
+    def _format_request_diagnostics(self, responses) -> str:
+        """整理最近一次 HTTP 响应摘要，避免日志只有 JSONDecodeError 文案。"""
+        if not responses:
+            return "no captured requests response"
+
+        latest = responses[-1]
+        preview = latest["text_preview"].replace("\n", "\\n").replace("\r", "\\r")
+        return (
+            f"method={latest['method']} "
+            f"url={latest['url']} "
+            f"status={latest['status_code']} "
+            f"content_type={latest['content_type']!r} "
+            f"body_preview={preview!r}"
+        )
+
     def get_stock_list(self) -> Optional[pd.DataFrame]:
         """获取股票列表（使用 AKShare 的 stock_info_a_code_name 接口获取真实股票名称）"""
         if not self.is_available():
@@ -40,8 +89,9 @@ class AKShareAdapter(DataSourceAdapter):
             import akshare as ak
             logger.info("AKShare: Fetching stock list with real names from stock_info_a_code_name()...")
 
-            # 使用 AKShare 的 stock_info_a_code_name 接口获取股票代码和名称
-            df = ak.stock_info_a_code_name()
+            with self._capture_requests_diagnostics() as responses:
+                # 使用 AKShare 的 stock_info_a_code_name 接口获取股票代码和名称
+                df = ak.stock_info_a_code_name()
 
             if df is None or df.empty:
                 logger.warning("AKShare: stock_info_a_code_name() returned empty data")
@@ -109,7 +159,18 @@ class AKShareAdapter(DataSourceAdapter):
             return df
 
         except Exception as e:
-            logger.error(f"AKShare: Failed to fetch stock list: {e}")
+            diagnostics = "request diagnostics unavailable"
+            try:
+                diagnostics = self._format_request_diagnostics(locals().get("responses", []))
+            except Exception as diagnostics_error:
+                diagnostics = f"failed to format request diagnostics: {diagnostics_error}"
+
+            logger.error(
+                "AKShare: Failed to fetch stock list: %s(%s), %s",
+                type(e).__name__,
+                e,
+                diagnostics,
+            )
             return None
 
     def get_daily_basic(self, trade_date: str) -> Optional[pd.DataFrame]:
@@ -389,4 +450,3 @@ class AKShareAdapter(DataSourceAdapter):
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
         logger.info(f"AKShare: Using yesterday as trade date: {yesterday}")
         return yesterday
-
