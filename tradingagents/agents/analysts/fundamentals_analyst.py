@@ -11,6 +11,11 @@ from tradingagents.utils.tool_logging import log_analyst_module
 
 # 导入统一日志系统
 from tradingagents.utils.logging_init import get_logger
+from tradingagents.agents.utils.codex_session import (
+    build_codex_session_event,
+    build_invoke_kwargs,
+    merge_codex_session_event,
+)
 logger = get_logger("default")
 
 # 导入Google工具调用处理器
@@ -99,6 +104,11 @@ def create_fundamentals_analyst(llm, toolkit):
     @log_analyst_module("fundamentals")
     def fundamentals_analyst_node(state):
         logger.debug(f"📊 [DEBUG] ===== 基本面分析师节点开始 =====")
+        codex_session = None
+        invoke_state = {
+            "task_id": state.get("task_id", ""),
+            "codex_role_sessions": state.get("codex_role_sessions", {}),
+        }
 
         # 🔧 工具调用计数器 - 防止无限循环
         # 检查消息历史中是否有 ToolMessage，如果有则说明工具已执行过
@@ -296,7 +306,10 @@ def create_fundamentals_analyst(llm, toolkit):
         logger.info(f"📊 [基本面分析师] 消息历史数量: {len(state['messages'])}")
 
         try:
-            chain = prompt | fresh_llm.bind_tools(tools)
+            llm_with_tools = fresh_llm.bind_tools(
+                tools,
+                **build_invoke_kwargs(fresh_llm, state, "Fundamentals Analyst"),
+            )
             logger.info(f"📊 [基本面分析师] ✅ 工具绑定成功，绑定了 {len(tools)} 个工具")
         except Exception as e:
             logger.error(f"📊 [基本面分析师] ❌ 工具绑定失败: {e}")
@@ -364,7 +377,14 @@ def create_fundamentals_analyst(llm, toolkit):
         logger.info("=" * 80)
 
         # 修复：传递字典而不是直接传递消息列表，以便 ChatPromptTemplate 能正确处理所有变量
-        result = chain.invoke({"messages": state["messages"]})
+        prompt_value = prompt.invoke({"messages": state["messages"]})
+        result = llm_with_tools.invoke(prompt_value.to_messages())
+        codex_session = build_codex_session_event("Fundamentals Analyst", result)
+        if codex_session:
+            invoke_state["codex_role_sessions"] = merge_codex_session_event(
+                invoke_state["codex_role_sessions"],
+                codex_session,
+            )
         logger.info(f"📊 [基本面分析师] LLM调用完成")
         
         # 🔍 [调试日志] 打印AIMessage的详细内容
@@ -424,7 +444,10 @@ def create_fundamentals_analyst(llm, toolkit):
                 analyst_name="基本面分析师"
             )
 
-            return {"fundamentals_report": report}
+            return {
+                "fundamentals_report": report,
+                "codex_session": codex_session,
+            }
         else:
             # 非Google模型的处理逻辑
             logger.debug(f"📊 [DEBUG] 非Google模型 ({fresh_llm.__class__.__name__})，使用标准处理逻辑")
@@ -467,11 +490,22 @@ def create_fundamentals_analyst(llm, toolkit):
                         MessagesPlaceholder(variable_name="messages"),
                     ])
 
-                    # 不绑定工具，强制LLM生成文本
-                    force_chain = force_prompt | fresh_llm
-
                     logger.info(f"🔧 [强制生成报告] 使用专门的提示词重新调用LLM...")
-                    force_result = force_chain.invoke({"messages": messages})
+                    force_prompt_value = force_prompt.invoke({"messages": messages})
+                    force_result = fresh_llm.invoke(
+                        force_prompt_value.to_messages(),
+                        **build_invoke_kwargs(
+                            fresh_llm,
+                            invoke_state,
+                            "Fundamentals Analyst",
+                        ),
+                    )
+                    codex_session = build_codex_session_event("Fundamentals Analyst", force_result)
+                    if codex_session:
+                        invoke_state["codex_role_sessions"] = merge_codex_session_event(
+                            invoke_state["codex_role_sessions"],
+                            codex_session,
+                        )
 
                     report = str(force_result.content) if hasattr(force_result, 'content') else "基本面分析完成"
                     logger.info(f"✅ [强制生成报告] 成功生成报告，长度: {len(report)}字符")
@@ -479,7 +513,8 @@ def create_fundamentals_analyst(llm, toolkit):
                     return {
                         "fundamentals_report": report,
                         "messages": [force_result],
-                        "fundamentals_tool_call_count": tool_call_count
+                        "fundamentals_tool_call_count": tool_call_count,
+                        "codex_session": codex_session,
                     }
 
                 elif tool_call_count >= max_tool_calls:
@@ -489,7 +524,8 @@ def create_fundamentals_analyst(llm, toolkit):
                     return {
                         "messages": [result],
                         "fundamentals_report": fallback_report,
-                        "fundamentals_tool_call_count": tool_call_count
+                        "fundamentals_tool_call_count": tool_call_count,
+                        "codex_session": codex_session,
                     }
                 else:
                     # 第一次调用工具，正常流程
@@ -505,7 +541,8 @@ def create_fundamentals_analyst(llm, toolkit):
                     # ⚠️ 注意：不要在这里增加计数器！
                     # 计数器应该在工具执行完成后（下一次进入分析师节点时）才增加
                     return {
-                        "messages": [result]
+                        "messages": [result],
+                        "codex_session": codex_session,
                     }
             else:
                 # 没有工具调用，检查是否需要强制调用工具
@@ -567,7 +604,8 @@ def create_fundamentals_analyst(llm, toolkit):
                     return {
                         "fundamentals_report": report,
                         "messages": [result],
-                        "fundamentals_tool_call_count": tool_call_count
+                        "fundamentals_tool_call_count": tool_call_count,
+                        "codex_session": codex_session,
                     }
 
                 # 如果没有工具结果且没有分析内容，才进行强制调用
@@ -650,14 +688,26 @@ def create_fundamentals_analyst(llm, toolkit):
 - 分析要详细且专业"""
 
                 try:
-                    # 创建简单的分析链
                     analysis_prompt_template = ChatPromptTemplate.from_messages([
                         ("system", "你是专业的股票基本面分析师，基于提供的真实数据进行分析。"),
                         ("human", "{analysis_request}")
                     ])
                     
-                    analysis_chain = analysis_prompt_template | fresh_llm
-                    analysis_result = analysis_chain.invoke({"analysis_request": analysis_prompt})
+                    analysis_prompt_value = analysis_prompt_template.invoke({"analysis_request": analysis_prompt})
+                    analysis_result = fresh_llm.invoke(
+                        analysis_prompt_value.to_messages(),
+                        **build_invoke_kwargs(
+                            fresh_llm,
+                            invoke_state,
+                            "Fundamentals Analyst",
+                        ),
+                    )
+                    codex_session = build_codex_session_event("Fundamentals Analyst", analysis_result)
+                    if codex_session:
+                        invoke_state["codex_role_sessions"] = merge_codex_session_event(
+                            invoke_state["codex_role_sessions"],
+                            codex_session,
+                        )
                     
                     if hasattr(analysis_result, 'content'):
                         report = analysis_result.content
@@ -673,7 +723,8 @@ def create_fundamentals_analyst(llm, toolkit):
                 # 🔧 保持工具调用计数器不变（已在开始时根据ToolMessage更新）
                 return {
                     "fundamentals_report": report,
-                    "fundamentals_tool_call_count": tool_call_count
+                    "fundamentals_tool_call_count": tool_call_count,
+                    "codex_session": codex_session,
                 }
 
         # 这里不应该到达，但作为备用
@@ -682,7 +733,8 @@ def create_fundamentals_analyst(llm, toolkit):
         return {
             "messages": [result],
             "fundamentals_report": result.content if hasattr(result, 'content') else str(result),
-            "fundamentals_tool_call_count": tool_call_count
+            "fundamentals_tool_call_count": tool_call_count,
+            "codex_session": codex_session,
         }
 
     return fundamentals_analyst_node

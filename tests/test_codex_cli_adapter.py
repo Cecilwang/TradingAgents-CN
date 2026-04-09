@@ -354,14 +354,13 @@ def test_generate_attaches_codex_usage_metadata(monkeypatch):
 
     result = llm._generate(
         [HumanMessage(content="给出最终结果")],
-        session_id="analysis_789",
+        task_id="analysis_789",
         analysis_type="stock_analysis",
     )
 
     message = result.generations[0].message
 
-    assert message.response_metadata["session_id"] == "thread_456"
-    assert message.response_metadata["analysis_session_id"] == "analysis_789"
+    assert message.response_metadata["codex_session_id"] == "thread_456"
     assert message.response_metadata["token_usage"] == {
         "prompt_tokens": 130,
         "completion_tokens": 55,
@@ -375,8 +374,7 @@ def test_generate_attaches_codex_usage_metadata(monkeypatch):
         "cached_input_tokens": 80,
     }
     assert result.llm_output == {
-        "session_id": "thread_456",
-        "analysis_session_id": "analysis_789",
+        "codex_session_id": "thread_456",
         "token_usage": {
             "prompt_tokens": 130,
             "completion_tokens": 55,
@@ -422,15 +420,14 @@ def test_generate_passes_resume_session_id(monkeypatch):
 
     result = llm._generate(
         [HumanMessage(content="继续讨论")],
-        session_id="analysis_1",
+        task_id="analysis_1",
         analysis_type="stock_analysis",
         resume_session_id="thread_prev",
     )
 
     message = result.generations[0].message
     assert message.content == "继续回应"
-    assert message.response_metadata["session_id"] == "thread_prev"
-    assert message.response_metadata["analysis_session_id"] == "analysis_1"
+    assert message.response_metadata["codex_session_id"] == "thread_prev"
 
 
 def test_create_llm_by_provider_returns_codex_cli():

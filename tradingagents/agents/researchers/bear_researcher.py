@@ -1,6 +1,9 @@
 # 导入统一日志系统
 from tradingagents.utils.logging_init import get_logger
-from tradingagents.agents.utils.codex_session import invoke_role_with_codex_session
+from tradingagents.agents.utils.codex_session import (
+    build_codex_session_event,
+    build_invoke_kwargs,
+)
 
 logger = get_logger("default")
 
@@ -119,13 +122,10 @@ def create_bear_researcher(llm, memory):
 
 请直接继续输出中文辩论内容，保持对话风格，不使用特殊格式。"""
 
-        response, updated_codex_role_sessions = invoke_role_with_codex_session(
-            llm=llm,
-            state=state,
-            role_name="Bear Researcher",
-            full_prompt=build_full_prompt,
-            continuation_prompt=continuation_prompt,
-        )
+        invoke_kwargs = build_invoke_kwargs(llm, state, "Bear Researcher")
+        prompt = continuation_prompt if invoke_kwargs.get("resume_session_id") else build_full_prompt()
+        response = llm.invoke(prompt, **invoke_kwargs)
+        codex_session = build_codex_session_event("Bear Researcher", response)
 
         argument = f"Bear Analyst: {response.content}"
 
@@ -142,7 +142,7 @@ def create_bear_researcher(llm, memory):
 
         return {
             "investment_debate_state": new_investment_debate_state,
-            "codex_role_sessions": updated_codex_role_sessions,
+            "codex_session": codex_session,
         }
 
     return bear_node

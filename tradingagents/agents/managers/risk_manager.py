@@ -3,6 +3,10 @@ import json
 
 # 导入统一日志系统
 from tradingagents.utils.logging_init import get_logger
+from tradingagents.agents.utils.codex_session import (
+    build_codex_session_event,
+    build_invoke_kwargs,
+)
 logger = get_logger("default")
 
 
@@ -69,6 +73,8 @@ def create_risk_manager(llm, memory):
         max_retries = 3
         retry_count = 0
         response_content = ""
+        response = None
+        codex_session = None
 
         while retry_count < max_retries:
             try:
@@ -77,7 +83,11 @@ def create_risk_manager(llm, memory):
                 # ⏱️ 记录开始时间
                 start_time = time.time()
 
-                response = llm.invoke(prompt)
+                response = llm.invoke(
+                    prompt,
+                    **build_invoke_kwargs(llm, state, "Risk Judge"),
+                )
+                codex_session = build_codex_session_event("Risk Judge", response)
 
                 # ⏱️ 记录结束时间
                 elapsed_time = time.time() - start_time
@@ -158,6 +168,7 @@ def create_risk_manager(llm, memory):
         return {
             "risk_debate_state": new_risk_debate_state,
             "final_trade_decision": response_content,
+            "codex_session": codex_session,
         }
 
     return risk_manager_node

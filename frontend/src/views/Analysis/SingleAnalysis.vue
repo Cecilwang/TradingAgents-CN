@@ -623,19 +623,19 @@
                         <!-- 报告内容 -->
                         <div class="report-content-wrapper">
                           <div
-                            v-if="getModuleCodexSessions(report.key).length > 0"
+                            v-if="getModuleCodexSession(report.key)"
                             class="codex-session-block"
                           >
                             <div class="codex-session-title">Codex Sessions</div>
                             <div class="codex-session-list">
                               <div
-                                v-for="session in getModuleCodexSessions(report.key)"
-                                :key="`${report.key}-${session.roleName}`"
+                                v-for="sessionId in getModuleCodexSession(report.key)?.sessionIds || []"
+                                :key="`${report.key}-${sessionId}`"
                                 class="codex-session-item"
                               >
-                                <span class="codex-session-role">{{ session.roleName }}</span>
+                                <span class="codex-session-role">{{ getModuleCodexSession(report.key)?.roleName }}</span>
                                 <el-tag type="info" effect="plain" class="codex-session-tag">
-                                  {{ session.sessionId }}
+                                  {{ sessionId }}
                                 </el-tag>
                               </div>
                             </div>
@@ -734,7 +734,7 @@ import { ANALYSTS, convertAnalystNamesToIds } from '@/constants/analysts'
 import { marked } from 'marked'
 import { recommendModels, validateModels, type ModelRecommendationResponse } from '@/api/modelCapabilities'
 import { validateStockCode, getStockCodeFormatHelp, getStockCodeExamples } from '@/utils/stockValidator'
-import { getRelatedCodexSessions } from '@/utils/codexSessions'
+import { getModuleCodexSession } from '@/utils/codexSessions'
 import { normalizeMarketForAnalysis, getMarketByStockCode } from '@/utils/market'
 
 // 配置marked选项
@@ -1331,13 +1331,6 @@ const getAnalysisReports = (data: any) => {
   }
 
   return reports
-}
-
-const getModuleCodexSessions = (moduleName: string) => {
-  return getRelatedCodexSessions(
-    moduleName,
-    analysisResults.value?.codex_role_sessions || {}
-  )
 }
 
 // 获取报告图标

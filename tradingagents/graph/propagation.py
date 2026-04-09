@@ -35,6 +35,7 @@ class Propagator:
             "company_of_interest": company_name,
             "trade_date": str(trade_date),
             "task_id": task_id or "",
+            "codex_session": {},
             "codex_role_sessions": {},
             "investment_debate_state": InvestDebateState(
                 {"history": "", "current_response": "", "count": 0}

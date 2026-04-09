@@ -29,6 +29,7 @@ from tradingagents.agents.utils.agent_states import (
     InvestDebateState,
     RiskDebateState,
 )
+from tradingagents.agents.utils.codex_session import merge_codex_session_event
 from tradingagents.dataflows.interface import set_config
 
 from .conditional_logic import ConditionalLogic
@@ -1002,10 +1003,15 @@ class TradingAgentsGraph:
                     for node_name, node_update in chunk.items():
                         if not node_name.startswith('__'):
                             final_state.update(node_update)
+                            self._merge_codex_session_into_state(final_state, node_update)
                 else:
                     # values 模式：chunk = {"messages": [...], ...}
                     if len(chunk.get("messages", [])) > 0:
                         chunk["messages"][-1].pretty_print()
+                    chunk["codex_role_sessions"] = merge_codex_session_event(
+                        final_state.get("codex_role_sessions", {}) if final_state else {},
+                        chunk.get("codex_session"),
+                    )
                     trace.append(chunk)
                     final_state = chunk
 
@@ -1044,6 +1050,7 @@ class TradingAgentsGraph:
                     for node_name, node_update in chunk.items():
                         if not node_name.startswith('__'):
                             final_state.update(node_update)
+                            self._merge_codex_session_into_state(final_state, node_update)
             else:
                 # 原有的invoke模式（也需要计时）
                 logger.info("⏱️ 使用 invoke 模式执行分析（无进度回调）")
@@ -1071,6 +1078,7 @@ class TradingAgentsGraph:
                     for node_name, node_update in chunk.items():
                         if not node_name.startswith('__'):
                             final_state.update(node_update)
+                            self._merge_codex_session_into_state(final_state, node_update)
 
         # 记录最后一个节点的时间
         if current_node_name and current_node_start:
@@ -1096,6 +1104,7 @@ class TradingAgentsGraph:
 
         # 将性能数据添加到状态中
         final_state['performance_metrics'] = performance_data
+        final_state.pop("codex_session", None)
 
         # Store current state for reflection
         self.curr_state = final_state
@@ -1204,6 +1213,17 @@ class TradingAgentsGraph:
 
         except Exception as e:
             logger.error(f"❌ 进度更新失败: {e}", exc_info=True)
+
+    def _merge_codex_session_into_state(
+        self,
+        final_state: Dict[str, Any],
+        node_update: Dict[str, Any],
+    ) -> None:
+        """把节点返回的单次 Codex session 合并到最终状态。"""
+        final_state["codex_role_sessions"] = merge_codex_session_event(
+            final_state.get("codex_role_sessions", {}),
+            node_update.get("codex_session"),
+        )
 
     def _build_performance_data(self, node_timings: Dict[str, float], total_elapsed: float) -> Dict[str, Any]:
         """构建性能数据结构

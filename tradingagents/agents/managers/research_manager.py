@@ -3,6 +3,10 @@ import json
 
 # 导入统一日志系统
 from tradingagents.utils.logging_init import get_logger
+from tradingagents.agents.utils.codex_session import (
+    build_codex_session_event,
+    build_invoke_kwargs,
+)
 logger = get_logger("default")
 
 
@@ -79,7 +83,11 @@ def create_research_manager(llm, memory):
         # ⏱️ 记录开始时间
         start_time = time.time()
 
-        response = llm.invoke(prompt)
+        response = llm.invoke(
+            prompt,
+            **build_invoke_kwargs(llm, state, "Research Manager"),
+        )
+        codex_session = build_codex_session_event("Research Manager", response)
 
         # ⏱️ 记录结束时间
         elapsed_time = time.time() - start_time
@@ -103,6 +111,7 @@ def create_research_manager(llm, memory):
         return {
             "investment_debate_state": new_investment_debate_state,
             "investment_plan": response.content,
+            "codex_session": codex_session,
         }
 
     return research_manager_node

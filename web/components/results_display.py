@@ -14,23 +14,24 @@ from utils.report_exporter import render_export_buttons
 # 导入日志模块
 from tradingagents.utils.codex_session_metadata import (
     extract_codex_role_sessions,
-    get_related_codex_sessions,
+    get_report_codex_sessions,
 )
 from tradingagents.utils.logging_manager import get_logger
 logger = get_logger('web')
 
 
 def render_report_codex_sessions(report_key, source_data):
-    """在当前分析结果页展示报告对应的 Codex sessions。"""
-    session_pairs = get_related_codex_sessions(
+    """在当前分析结果页展示报告对应的 Codex session 列表。"""
+    session_entry = get_report_codex_sessions(
         report_key,
         extract_codex_role_sessions(source_data),
     )
-    if not session_pairs:
+    if not session_entry:
         return
 
+    role_name, session_ids = session_entry
     st.markdown("**Codex Sessions**")
-    for role_name, session_id in session_pairs:
+    for session_id in session_ids:
         st.markdown(f"- `{role_name}`: `{session_id}`")
     st.markdown("---")
 

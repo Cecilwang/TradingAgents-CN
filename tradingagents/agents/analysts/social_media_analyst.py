@@ -5,6 +5,10 @@ import json
 # 导入统一日志系统和分析模块日志装饰器
 from tradingagents.utils.logging_init import get_logger
 from tradingagents.utils.tool_logging import log_analyst_module
+from tradingagents.agents.utils.codex_session import (
+    build_codex_session_event,
+    build_invoke_kwargs,
+)
 logger = get_logger("analysts.social_media")
 
 # 导入Google工具调用处理器
@@ -187,10 +191,13 @@ def create_social_media_analyst(llm, toolkit):
         prompt = prompt.partial(current_date=current_date)
         prompt = prompt.partial(ticker=ticker)
 
-        chain = prompt | llm.bind_tools(tools)
-
-        # 修复：传递字典而不是直接传递消息列表，以便 ChatPromptTemplate 能正确处理所有变量
-        result = chain.invoke({"messages": state["messages"]})
+        llm_with_tools = llm.bind_tools(
+            tools,
+            **build_invoke_kwargs(llm, state, "Social Media Analyst"),
+        )
+        prompt_value = prompt.invoke({"messages": state["messages"]})
+        result = llm_with_tools.invoke(prompt_value.to_messages())
+        codex_session = build_codex_session_event("Social Media Analyst", result)
 
         # 使用统一的Google工具调用处理器
         if GoogleToolCallHandler.is_google_model(llm):
@@ -225,7 +232,8 @@ def create_social_media_analyst(llm, toolkit):
         return {
             "messages": [result],
             "sentiment_report": report,
-            "sentiment_tool_call_count": tool_call_count + 1
+            "sentiment_tool_call_count": tool_call_count + 1,
+            "codex_session": codex_session,
         }
 
     return social_media_analyst_node

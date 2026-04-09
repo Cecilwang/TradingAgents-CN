@@ -223,7 +223,7 @@ class ChatCodexCLI(BaseChatModel):
         return self._build_chat_result(
             parsed_response=parsed_response,
             execution_metadata=execution_result["execution_metadata"],
-            session_id=request["session_id"],
+            task_id=request["task_id"],
             analysis_type=request["analysis_type"],
             start_time=start_time,
         )
@@ -265,7 +265,7 @@ class ChatCodexCLI(BaseChatModel):
         return self._build_chat_result(
             parsed_response=parsed_response,
             execution_metadata=execution_result["execution_metadata"],
-            session_id=request["session_id"],
+            task_id=request["task_id"],
             analysis_type=request["analysis_type"],
             start_time=start_time,
         )
@@ -323,7 +323,7 @@ class ChatCodexCLI(BaseChatModel):
 
         self._track_codex_usage(
             execution_metadata=stream_state["execution_metadata"],
-            session_id=request["session_id"],
+            task_id=request["task_id"],
             analysis_type=request["analysis_type"],
         )
 
@@ -390,7 +390,7 @@ class ChatCodexCLI(BaseChatModel):
 
         self._track_codex_usage(
             execution_metadata=stream_state["execution_metadata"],
-            session_id=request["session_id"],
+            task_id=request["task_id"],
             analysis_type=request["analysis_type"],
         )
 
@@ -407,14 +407,13 @@ class ChatCodexCLI(BaseChatModel):
         self,
         parsed_response: Dict[str, Any],
         execution_metadata: Dict[str, Any],
-        session_id: Optional[str],
+        task_id: Optional[str],
         analysis_type: Optional[str],
         start_time: float,
     ) -> ChatResult:
         """将规整后的响应构造成 LangChain ChatResult。"""
         response_metadata = self._build_response_metadata(
             execution_metadata=execution_metadata,
-            session_id=session_id,
         )
         usage_metadata = self._build_usage_metadata(execution_metadata)
         ai_message = AIMessage(
@@ -426,7 +425,7 @@ class ChatCodexCLI(BaseChatModel):
         generation = ChatGeneration(message=ai_message)
         self._track_codex_usage(
             execution_metadata=execution_metadata,
-            session_id=session_id,
+            task_id=task_id,
             analysis_type=analysis_type,
         )
 
@@ -442,8 +441,7 @@ class ChatCodexCLI(BaseChatModel):
         return ChatResult(
             generations=[generation],
             llm_output={
-                "session_id": execution_metadata.get("thread_id") or "",
-                "analysis_session_id": session_id or "",
+                "codex_session_id": execution_metadata.get("thread_id") or "",
                 "token_usage": response_metadata.get("token_usage", {}),
             },
         )
@@ -476,7 +474,6 @@ class ChatCodexCLI(BaseChatModel):
         self,
         *,
         execution_metadata: Dict[str, Any],
-        session_id: Optional[str],
     ) -> Dict[str, Any]:
         """构造 LangChain 消息级别的响应元数据。"""
         token_usage = self._build_token_usage(execution_metadata)
@@ -484,8 +481,7 @@ class ChatCodexCLI(BaseChatModel):
 
         return {
             "provider": "codex",
-            "session_id": codex_session_id,
-            "analysis_session_id": session_id or "",
+            "codex_session_id": codex_session_id,
             "token_usage": token_usage,
         }
 
@@ -527,7 +523,7 @@ class ChatCodexCLI(BaseChatModel):
         self,
         *,
         execution_metadata: Dict[str, Any],
-        session_id: Optional[str],
+        task_id: Optional[str],
         analysis_type: Optional[str],
     ) -> None:
         """记录 Codex CLI 的 token 使用和会话标识。"""
@@ -540,11 +536,11 @@ class ChatCodexCLI(BaseChatModel):
         if not codex_session_id and input_tokens == 0 and output_tokens == 0:
             return
 
-        effective_session_id = session_id or codex_session_id or ""
+        effective_session_id = task_id or codex_session_id or ""
         logger.info(
-            "📊 [Codex CLI] session_id=%s, analysis_session_id=%s, input_tokens=%s, cached_input_tokens=%s, output_tokens=%s",
+            "📊 [Codex CLI] codex_session_id=%s, task_id=%s, input_tokens=%s, cached_input_tokens=%s, output_tokens=%s",
             codex_session_id or "-",
-            session_id or "-",
+            task_id or "-",
             input_tokens,
             cached_input_tokens,
             output_tokens,
@@ -626,7 +622,7 @@ class ChatCodexCLI(BaseChatModel):
         kwargs: Dict[str, Any],
     ) -> Dict[str, Any]:
         """抽取并规整工具调用相关参数，供同步/异步入口共享。"""
-        session_id = kwargs.pop("session_id", None)
+        task_id = kwargs.pop("task_id", None)
         analysis_type = kwargs.pop("analysis_type", None)
         resume_session_id = kwargs.pop("resume_session_id", None)
         strict = kwargs.pop("strict", None)
@@ -639,9 +635,9 @@ class ChatCodexCLI(BaseChatModel):
         )
 
         logger.info(
-            "🧩 [Codex CLI] 规整请求: model=%s, ta_session_id=%s, resume_session_id=%s, tools=%s, tool_choice=%s, parallel_tool_calls=%s, messages=%s",
+            "🧩 [Codex CLI] 规整请求: model=%s, task_id=%s, resume_session_id=%s, tools=%s, tool_choice=%s, parallel_tool_calls=%s, messages=%s",
             self.model_name,
-            session_id or "-",
+            task_id or "-",
             resume_session_id or "-",
             len(tools),
             tool_choice,
@@ -653,7 +649,7 @@ class ChatCodexCLI(BaseChatModel):
             "tools": tools,
             "tool_choice": tool_choice,
             "parallel_tool_calls": parallel_tool_calls,
-            "session_id": session_id,
+            "task_id": task_id,
             "analysis_type": analysis_type,
             "resume_session_id": resume_session_id,
         }

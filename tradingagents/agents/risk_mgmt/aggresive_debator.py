@@ -2,7 +2,10 @@ import time
 
 # 导入统一日志系统
 from tradingagents.utils.logging_init import get_logger
-from tradingagents.agents.utils.codex_session import invoke_role_with_codex_session
+from tradingagents.agents.utils.codex_session import (
+    build_codex_session_event,
+    build_invoke_kwargs,
+)
 
 logger = get_logger("default")
 
@@ -67,13 +70,10 @@ def create_risky_debator(llm):
         logger.info("⏱️ [Risky Analyst] 开始调用LLM...")
         llm_start_time = time.time()
 
-        response, updated_codex_role_sessions = invoke_role_with_codex_session(
-            llm=llm,
-            state=state,
-            role_name="Risky Analyst",
-            full_prompt=build_full_prompt,
-            continuation_prompt=continuation_prompt,
-        )
+        invoke_kwargs = build_invoke_kwargs(llm, state, "Risky Analyst")
+        prompt = continuation_prompt if invoke_kwargs.get("resume_session_id") else build_full_prompt()
+        response = llm.invoke(prompt, **invoke_kwargs)
+        codex_session = build_codex_session_event("Risky Analyst", response)
 
         llm_elapsed = time.time() - llm_start_time
         logger.info(f"⏱️ [Risky Analyst] LLM调用完成，耗时: {llm_elapsed:.2f}秒")
@@ -99,7 +99,7 @@ def create_risky_debator(llm):
 
         return {
             "risk_debate_state": new_risk_debate_state,
-            "codex_role_sessions": updated_codex_role_sessions,
+            "codex_session": codex_session,
         }
 
     return risky_node

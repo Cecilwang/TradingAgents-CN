@@ -8,6 +8,11 @@ from tradingagents.utils.tool_logging import log_analyst_module
 
 # 导入统一日志系统
 from tradingagents.utils.logging_init import get_logger
+from tradingagents.agents.utils.codex_session import (
+    build_codex_session_event,
+    build_invoke_kwargs,
+    merge_codex_session_event,
+)
 logger = get_logger("default")
 
 # 导入Google工具调用处理器
@@ -96,6 +101,10 @@ def create_market_analyst(llm, toolkit):
 
     def market_analyst_node(state):
         logger.debug(f"📈 [DEBUG] ===== 市场分析师节点开始 =====")
+        invoke_state = {
+            "task_id": state.get("task_id", ""),
+            "codex_role_sessions": state.get("codex_role_sessions", {}),
+        }
 
         # 🔧 工具调用计数器 - 防止无限循环
         tool_call_count = state.get("market_tool_call_count", 0)
@@ -239,11 +248,20 @@ def create_market_analyst(llm, toolkit):
             logger.info(f"📊 [市场分析师] 消息[{i}] 类型={msg_type}, 内容={msg_content}")
         logger.info(f"📊 [市场分析师] ========== 消息列表结束 ==========")
 
-        chain = prompt | llm.bind_tools(tools)
+        llm_with_tools = llm.bind_tools(
+            tools,
+            **build_invoke_kwargs(llm, state, "Market Analyst"),
+        )
 
         logger.info(f"📊 [市场分析师] 开始调用LLM...")
-        # 修复：传递字典而不是直接传递消息列表，以便 ChatPromptTemplate 能正确处理所有变量
-        result = chain.invoke({"messages": state["messages"]})
+        prompt_value = prompt.invoke({"messages": state["messages"]})
+        result = llm_with_tools.invoke(prompt_value.to_messages())
+        codex_session = build_codex_session_event("Market Analyst", result)
+        if codex_session:
+            invoke_state["codex_role_sessions"] = merge_codex_session_event(
+                invoke_state["codex_role_sessions"],
+                codex_session,
+            )
         logger.info(f"📊 [市场分析师] LLM调用完成")
 
         # 打印LLM响应
@@ -280,7 +298,8 @@ def create_market_analyst(llm, toolkit):
             return {
                 "messages": [result],
                 "market_report": report,
-                "market_tool_call_count": tool_call_count + 1
+                "market_tool_call_count": tool_call_count + 1,
+                "codex_session": codex_session,
             }
         else:
             # 非Google模型的处理逻辑
@@ -470,7 +489,11 @@ def create_market_analyst(llm, toolkit):
                     messages = state["messages"] + [result] + tool_messages + [HumanMessage(content=analysis_prompt)]
 
                     # 生成最终分析报告
-                    final_result = llm.invoke(messages)
+                    final_result = llm.invoke(
+                        messages,
+                        **build_invoke_kwargs(llm, invoke_state, "Market Analyst"),
+                    )
+                    codex_session = build_codex_session_event("Market Analyst", final_result)
                     report = final_result.content
 
                     logger.info(f"📊 [市场分析师] 生成完整分析报告，长度: {len(report)}")
@@ -480,7 +503,8 @@ def create_market_analyst(llm, toolkit):
                     return {
                         "messages": [result] + tool_messages + [final_result],
                         "market_report": report,
-                        "market_tool_call_count": tool_call_count + 1
+                        "market_tool_call_count": tool_call_count + 1,
+                        "codex_session": codex_session,
                     }
 
                 except Exception as e:
@@ -494,14 +518,16 @@ def create_market_analyst(llm, toolkit):
                     return {
                         "messages": [result],
                         "market_report": report,
-                        "market_tool_call_count": tool_call_count + 1
+                        "market_tool_call_count": tool_call_count + 1,
+                        "codex_session": codex_session,
                     }
 
             # 🔧 更新工具调用计数器
             return {
                 "messages": [result],
                 "market_report": report,
-                "market_tool_call_count": tool_call_count + 1
+                "market_tool_call_count": tool_call_count + 1,
+                "codex_session": codex_session,
             }
 
     return market_analyst_node

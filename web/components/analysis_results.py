@@ -16,7 +16,7 @@ import hashlib
 import logging
 from tradingagents.utils.codex_session_metadata import (
     extract_codex_role_sessions,
-    get_related_codex_sessions,
+    get_report_codex_sessions,
 )
 
 # MongoDB相关导入
@@ -33,16 +33,17 @@ logger = logging.getLogger(__name__)
 
 
 def render_report_codex_sessions(report_key: str, source_data: Dict[str, Any]):
-    """在报告内容前渲染相关 Codex session。"""
-    session_pairs = get_related_codex_sessions(
+    """在报告内容前渲染模块自己的 Codex session 列表。"""
+    session_entry = get_report_codex_sessions(
         report_key,
         extract_codex_role_sessions(source_data),
     )
-    if not session_pairs:
+    if not session_entry:
         return
 
+    role_name, session_ids = session_entry
     st.markdown("**Codex Sessions**")
-    for role_name, session_id in session_pairs:
+    for session_id in session_ids:
         st.markdown(f"- `{role_name}`: `{session_id}`")
     st.markdown("---")
 

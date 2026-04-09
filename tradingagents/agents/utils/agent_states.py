@@ -1,4 +1,4 @@
-from typing import Annotated, Dict
+from typing import Annotated, Dict, List
 
 from typing_extensions import TypedDict
 from langgraph.graph import MessagesState
@@ -52,8 +52,9 @@ class AgentState(MessagesState):
     company_of_interest: Annotated[str, "Company that we are interested in trading"]
     trade_date: Annotated[str, "What date we are trading at"]
     task_id: Annotated[str, "Current analysis task id"]
+    codex_session: Annotated[Dict[str, str], "Single node Codex session event"]
     codex_role_sessions: Annotated[
-        Dict[str, str], "Codex role sessions scoped to the current analysis task"
+        Dict[str, List[str]], "Codex role sessions scoped to the current analysis task"
     ]
 
     sender: Annotated[str, "Agent that sent this message"]

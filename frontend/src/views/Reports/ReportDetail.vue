@@ -232,19 +232,19 @@
           >
             <div class="module-content">
               <div
-                v-if="getModuleCodexSessions(module.key).length > 0"
+                v-if="getModuleCodexSession(module.key)"
                 class="codex-session-block"
               >
                 <div class="codex-session-title">Codex Sessions</div>
                 <div class="codex-session-list">
                   <div
-                    v-for="session in getModuleCodexSessions(module.key)"
-                    :key="`${module.key}-${session.roleName}`"
+                    v-for="sessionId in getModuleCodexSession(module.key)?.sessionIds || []"
+                    :key="`${module.key}-${sessionId}`"
                     class="codex-session-item"
                   >
-                    <span class="codex-session-role">{{ session.roleName }}</span>
+                    <span class="codex-session-role">{{ getModuleCodexSession(module.key)?.roleName }}</span>
                     <el-tag type="info" effect="plain" class="codex-session-tag">
-                      {{ session.sessionId }}
+                      {{ sessionId }}
                     </el-tag>
                   </div>
                 </div>
@@ -306,7 +306,7 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { marked } from 'marked'
 import { getMarketByStockCode } from '@/utils/market'
-import { getRelatedCodexSessions } from '@/utils/codexSessions'
+import { getModuleCodexSession } from '@/utils/codexSessions'
 import type { CurrencyAmount } from '@/api/paper'
 
 // 路由和认证
@@ -938,13 +938,6 @@ const getModuleDisplayContent = (_moduleName: string, content: string) => {
   } catch {
     return content
   }
-}
-
-const getModuleCodexSessions = (moduleName: string) => {
-  return getRelatedCodexSessions(
-    moduleName,
-    report.value?.codex_role_sessions || {}
-  )
 }
 
 const reportSummary = computed(() => {

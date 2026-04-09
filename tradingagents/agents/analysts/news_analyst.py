@@ -12,6 +12,11 @@ from tradingagents.tools.unified_news_tool import create_unified_news_tool
 from tradingagents.utils.stock_utils import StockUtils
 # 导入Google工具调用处理器
 from tradingagents.agents.utils.google_tool_handler import GoogleToolCallHandler
+from tradingagents.agents.utils.codex_session import (
+    build_codex_session_event,
+    build_invoke_kwargs,
+    merge_codex_session_event,
+)
 
 logger = get_logger("analysts.news")
 
@@ -20,6 +25,10 @@ def create_news_analyst(llm, toolkit):
     @log_analyst_module("news")
     def news_analyst_node(state):
         start_time = datetime.now()
+        invoke_state = {
+            "task_id": state.get("task_id", ""),
+            "codex_role_sessions": state.get("codex_role_sessions", {}),
+        }
 
         # 🔧 工具调用计数器 - 防止无限循环
         tool_call_count = state.get("news_tool_call_count", 0)
@@ -28,6 +37,7 @@ def create_news_analyst(llm, toolkit):
 
         current_date = state["trade_date"]
         ticker = state["company_of_interest"]
+        codex_session = None
 
         logger.info(f"[新闻分析师] 开始分析 {ticker} 的新闻，交易日期: {current_date}")
         session_id = state.get("session_id", "未知会话")
@@ -250,10 +260,20 @@ def create_news_analyst(llm, toolkit):
 
                     llm_start_time = datetime.now()
                     # 🔧 重要：传递系统消息和用户消息，不包含工具调用
-                    result = llm.invoke([
+                    direct_messages = [
                         {"role": "system", "content": analysis_system_prompt},
                         {"role": "user", "content": enhanced_prompt}
-                    ])
+                    ]
+                    result = llm.invoke(
+                        direct_messages,
+                        **build_invoke_kwargs(llm, invoke_state, "News Analyst"),
+                    )
+                    codex_session = build_codex_session_event("News Analyst", result)
+                    if codex_session:
+                        invoke_state["codex_role_sessions"] = merge_codex_session_event(
+                            invoke_state["codex_role_sessions"],
+                            codex_session,
+                        )
 
                     llm_end_time = datetime.now()
                     llm_time_taken = (llm_end_time - llm_start_time).total_seconds()
@@ -276,7 +296,8 @@ def create_news_analyst(llm, toolkit):
                         return {
                             "messages": [clean_message],
                             "news_report": report,
-                            "news_tool_call_count": tool_call_count + 1
+                            "news_tool_call_count": tool_call_count + 1,
+                            "codex_session": codex_session,
                         }
                     else:
                         logger.warning(f"[新闻分析师] ⚠️ LLM返回结果为空，回退到标准模式")
@@ -293,10 +314,19 @@ def create_news_analyst(llm, toolkit):
         
         # 使用统一的Google工具调用处理器
         llm_start_time = datetime.now()
-        chain = prompt | llm.bind_tools(tools)
+        llm_with_tools = llm.bind_tools(
+            tools,
+            **build_invoke_kwargs(llm, state, "News Analyst"),
+        )
         logger.info(f"[新闻分析师] 开始LLM调用，分析 {ticker} 的新闻")
-        # 修复：传递字典而不是直接传递消息列表，以便 ChatPromptTemplate 能正确处理所有变量
-        result = chain.invoke({"messages": state["messages"]})
+        prompt_value = prompt.invoke({"messages": state["messages"]})
+        result = llm_with_tools.invoke(prompt_value.to_messages())
+        codex_session = build_codex_session_event("News Analyst", result)
+        if codex_session:
+            invoke_state["codex_role_sessions"] = merge_codex_session_event(
+                invoke_state["codex_role_sessions"],
+                codex_session,
+            )
         
         llm_end_time = datetime.now()
         llm_time_taken = (llm_end_time - llm_start_time).total_seconds()
@@ -365,7 +395,11 @@ def create_news_analyst(llm, toolkit):
                         logger.info(f"[新闻分析师] 🔄 基于强制获取的新闻数据重新生成完整分析...")
                         logger.info(f"[新闻分析师] 📝 强制提示词长度: {len(forced_prompt)} 字符")
 
-                        forced_result = llm.invoke([{"role": "user", "content": forced_prompt}])
+                        forced_result = llm.invoke(
+                            [{"role": "user", "content": forced_prompt}],
+                            **build_invoke_kwargs(llm, invoke_state, "News Analyst"),
+                        )
+                        codex_session = build_codex_session_event("News Analyst", forced_result)
 
                         if hasattr(forced_result, 'content') and forced_result.content:
                             report = forced_result.content
@@ -403,7 +437,8 @@ def create_news_analyst(llm, toolkit):
         return {
             "messages": [clean_message],
             "news_report": report,
-            "news_tool_call_count": tool_call_count + 1
+            "news_tool_call_count": tool_call_count + 1,
+            "codex_session": codex_session,
         }
 
     return news_analyst_node
