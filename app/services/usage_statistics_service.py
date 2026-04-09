@@ -42,8 +42,9 @@ class UsageStatisticsService:
         model_name: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        limit: int = 100
-    ) -> List[UsageRecord]:
+        page: int = 1,
+        page_size: int = 100
+    ) -> tuple[List[UsageRecord], int]:
         """获取使用记录"""
         try:
             db = get_mongo_db()
@@ -61,20 +62,23 @@ class UsageStatisticsService:
                     query["timestamp"]["$gte"] = start_date.isoformat()
                 if end_date:
                     query["timestamp"]["$lte"] = end_date.isoformat()
-            
+
+            total = await collection.count_documents(query)
+            skip = max(page - 1, 0) * page_size
+
             # 查询记录
-            cursor = collection.find(query).sort("timestamp", -1).limit(limit)
+            cursor = collection.find(query).sort("timestamp", -1).skip(skip).limit(page_size)
             records = []
-            
+
             async for doc in cursor:
                 doc["id"] = str(doc.pop("_id"))
                 records.append(UsageRecord(**doc))
-            
-            logger.info(f"✅ 获取使用记录成功: {len(records)} 条")
-            return records
+
+            logger.info(f"✅ 获取使用记录成功: page={page}, page_size={page_size}, returned={len(records)}, total={total}")
+            return records, total
         except Exception as e:
             logger.error(f"❌ 获取使用记录失败: {e}")
-            return []
+            return [], 0
     
     async def get_usage_statistics(
         self,

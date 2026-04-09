@@ -40,9 +40,10 @@ export function getUsageRecords(params?: {
   model_name?: string
   start_date?: string
   end_date?: string
-  limit?: number
-}): Promise<ApiResponse<{ records: UsageRecord[]; total: number }>> {
-  return ApiClient.get<{ records: UsageRecord[]; total: number }>(
+  page?: number
+  page_size?: number
+}): Promise<ApiResponse<{ records: UsageRecord[]; total: number; page: number; page_size: number }>> {
+  return ApiClient.get<{ records: UsageRecord[]; total: number; page: number; page_size: number }>(
     '/api/usage/records',
     params
   )

@@ -22,7 +22,8 @@ async def get_usage_records(
     model_name: Optional[str] = Query(None, description="模型名称"),
     start_date: Optional[str] = Query(None, description="开始日期(ISO格式)"),
     end_date: Optional[str] = Query(None, description="结束日期(ISO格式)"),
-    limit: int = Query(100, ge=1, le=1000, description="返回记录数"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=1000, description="每页记录数"),
     current_user: dict = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """获取使用记录"""
@@ -32,12 +33,13 @@ async def get_usage_records(
         end_dt = datetime.fromisoformat(end_date) if end_date else None
 
         # 获取记录
-        records = await usage_statistics_service.get_usage_records(
+        records, total = await usage_statistics_service.get_usage_records(
             provider=provider,
             model_name=model_name,
             start_date=start_dt,
             end_date=end_dt,
-            limit=limit
+            page=page,
+            page_size=page_size
         )
 
         return {
@@ -45,7 +47,9 @@ async def get_usage_records(
             "message": "获取使用记录成功",
             "data": {
                 "records": [record.model_dump() for record in records],
-                "total": len(records)
+                "total": total,
+                "page": page,
+                "page_size": page_size,
             }
         }
     except Exception as e:
@@ -152,4 +156,3 @@ async def delete_old_records(
     except Exception as e:
         logger.error(f"删除旧记录失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

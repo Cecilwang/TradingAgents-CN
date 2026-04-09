@@ -20,35 +20,35 @@
 
       <!-- 统计概览 -->
       <el-row :gutter="20" class="stats-overview">
-        <el-col :span="6">
+        <el-col :span="4">
           <el-statistic title="总请求数" :value="statistics.total_requests">
             <template #prefix>
               <el-icon><Document /></el-icon>
             </template>
           </el-statistic>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="4">
           <el-statistic title="总未命中输入 Token" :value="statistics.total_input_tokens">
             <template #prefix>
               <el-icon><Upload /></el-icon>
             </template>
           </el-statistic>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="4">
           <el-statistic title="总缓存命中 Token" :value="statistics.total_cached_input_tokens || 0">
             <template #prefix>
               <el-icon><Upload /></el-icon>
             </template>
           </el-statistic>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="4">
           <el-statistic title="总输出 Token" :value="statistics.total_output_tokens">
             <template #prefix>
               <el-icon><Download /></el-icon>
             </template>
           </el-statistic>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="8">
           <div class="cost-statistic">
             <div class="cost-label">
               <el-icon><Money /></el-icon>
@@ -137,8 +137,8 @@
         :total="totalRecords"
         :page-sizes="[10, 20, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper"
-        @size-change="loadRecords"
-        @current-change="loadRecords"
+        @size-change="handlePageSizeChange"
+        @current-change="handlePageChange"
         style="margin-top: 20px; justify-content: center;"
       />
     </el-card>
@@ -224,7 +224,8 @@ const loadRecords = async () => {
   try {
     loading.value = true
     const res = await getUsageRecords({
-      limit: pageSize.value
+      page: currentPage.value,
+      page_size: pageSize.value
     })
     if (res.success) {
       records.value = res.data.records
@@ -241,6 +242,15 @@ const loadRecords = async () => {
 // 加载所有数据
 const loadData = async () => {
   await Promise.all([loadStatistics(), loadRecords()])
+}
+
+const handlePageSizeChange = () => {
+  currentPage.value = 1
+  loadRecords()
+}
+
+const handlePageChange = () => {
+  loadRecords()
 }
 
 // 渲染图表
@@ -478,11 +488,20 @@ onMounted(() => {
 
 .stats-overview {
   margin-top: 20px;
+  align-items: stretch;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+@media (max-width: 1400px) {
+  .stats-overview {
+    :deep(.el-col) {
+      margin-bottom: 16px;
+    }
+  }
 }
 </style>
