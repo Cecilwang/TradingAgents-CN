@@ -335,12 +335,22 @@ const rules: FormRules = {
   provider_name: [{ required: true, message: '请输入厂家名称', trigger: 'blur' }]
 }
 
+const normalizeCatalogModels = (models: ModelInfo[] = []): ModelInfo[] => {
+  return models.map(model => ({
+    ...model,
+    cached_input_price_per_1k: model.cached_input_price_per_1k ?? model.input_price_per_1k ?? null
+  }))
+}
+
 // 方法
 const loadCatalogs = async () => {
   loading.value = true
   try {
     const response = await configApi.getModelCatalog()
-    catalogs.value = response
+    catalogs.value = response.map(catalog => ({
+      ...catalog,
+      models: normalizeCatalogModels(catalog.models)
+    }))
   } catch (error) {
     console.error('加载模型目录失败:', error)
     ElMessage.error('加载模型目录失败')
@@ -392,7 +402,7 @@ const handleEdit = async (row: any) => {
   formData.value = {
     provider: row.provider,
     provider_name: row.provider_name,
-    models: JSON.parse(JSON.stringify(row.models))
+    models: normalizeCatalogModels(JSON.parse(JSON.stringify(row.models)))
   }
   // 打开对话框前刷新厂家列表
   await loadProviders()
