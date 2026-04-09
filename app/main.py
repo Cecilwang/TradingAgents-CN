@@ -39,7 +39,7 @@ from app.routers import websocket_notifications as websocket_notifications_route
 from app.routers import scheduler as scheduler_router
 from app.services.basics_sync_service import get_basics_sync_service
 from app.services.multi_source_basics_sync_service import MultiSourceBasicsSyncService
-from app.services.scheduler_service import set_scheduler_instance
+from app.services.scheduler_service import set_scheduler_instance, get_scheduler_service
 from app.worker.tushare_sync_service import (
     run_tushare_basic_info_sync,
     run_tushare_quotes_sync,
@@ -573,6 +573,7 @@ async def lifespan(app: FastAPI):
 
         # 设置调度器实例到服务中，以便API可以管理任务
         set_scheduler_instance(scheduler)
+        await get_scheduler_service().apply_persisted_job_states()
         logger.info("✅ 调度器服务已初始化")
     except Exception as e:
         logger.error(f"❌ 调度器启动失败: {e}", exc_info=True)

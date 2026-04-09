@@ -117,6 +117,7 @@ class SchedulerService:
         """
         try:
             self.scheduler.pause_job(job_id)
+            await self._update_job_paused_state(job_id, paused=True)
             logger.info(f"⏸️ 任务 {job_id} 已暂停")
             
             # 记录操作历史
@@ -139,6 +140,7 @@ class SchedulerService:
         """
         try:
             self.scheduler.resume_job(job_id)
+            await self._update_job_paused_state(job_id, paused=False)
             logger.info(f"▶️ 任务 {job_id} 已恢复")
             
             # 记录操作历史
@@ -977,6 +979,51 @@ class SchedulerService:
             logger.error(f"❌ 获取任务 {job_id} 元数据失败: {e}")
             return None
 
+    async def _update_job_paused_state(self, job_id: str, paused: bool) -> None:
+        """持久化任务暂停状态，用于服务重启后恢复。"""
+        db = self._get_db()
+        await db.scheduler_metadata.update_one(
+            {"job_id": job_id},
+            {
+                "$set": {
+                    "job_id": job_id,
+                    "paused": paused,
+                    "updated_at": get_utc8_now()
+                }
+            },
+            upsert=True
+        )
+
+    async def apply_persisted_job_states(self) -> None:
+        """应用已持久化的任务暂停状态。"""
+        try:
+            db = self._get_db()
+            cursor = db.scheduler_metadata.find(
+                {"paused": {"$exists": True}},
+                {"job_id": 1, "paused": 1}
+            )
+
+            async for metadata in cursor:
+                job_id = metadata.get("job_id")
+                if not job_id:
+                    continue
+
+                job = self.scheduler.get_job(job_id)
+                if not job:
+                    continue
+
+                paused = bool(metadata.get("paused"))
+                is_paused = job.next_run_time is None
+
+                if paused and not is_paused:
+                    self.scheduler.pause_job(job_id)
+                    logger.info(f"⏸️ 已恢复持久化暂停状态: {job_id}")
+                elif not paused and is_paused:
+                    self.scheduler.resume_job(job_id)
+                    logger.info(f"▶️ 已恢复持久化运行状态: {job_id}")
+        except Exception as e:
+            logger.error(f"❌ 应用持久化任务状态失败: {e}")
+
     async def update_job_metadata(
         self,
         job_id: str,
@@ -1157,4 +1204,3 @@ async def update_job_progress(
 
     except Exception as e:
         logger.error(f"❌ 更新任务进度失败: {e}")
-
